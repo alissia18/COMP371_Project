@@ -1,0 +1,353 @@
+// COMP371 Assignment 1
+// By Alissia Bocarro and 
+
+#include <iostream>
+
+
+#define GLEW_STATIC 1   // This allows linking with Static Library on Windows, without DLL
+#include <GL/glew.h>    // Include GLEW - OpenGL Extension Wrangler
+
+#include <GLFW/glfw3.h> // GLFW provides a cross-platform interface for creating a graphical context,
+                        // initializing OpenGL and binding inputs
+
+#include <glm/glm.hpp>  // GLM is an optimized math library with syntax to similar to OpenGL Shading Language
+#include <glm/gtc/matrix_transform.hpp> // include this to create transformation matrices
+
+void mouse_callback (GLFWwindow* window, double xpos, double ypos);
+
+using namespace glm;
+using namespace std;
+
+// camera movement
+vec3 cameraPos   = vec3(0.0f, 0.0f,  3.0f);
+vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
+vec3 cameraUp = vec3(0.0f, 1.0f, 0.0f);
+float yaw = -90.0f; // initialized to -90 because 0 results in pointing to the right, -90 makes it forward
+float pitch = 0.0f;
+// float fov = 45.0f;
+
+// mouse state 
+bool firstMouse = true;
+float lastX = 800.0f / 2.0;
+float lastY = 600.0 / 2.0;
+
+// timing
+float deltaTime = 0.0f; // time bw current and last frame
+float lastFrame = 0.0f;
+
+
+const char* getVertexShaderSource()
+{
+    // For now, you use a string for your shader code, in the assignment, shaders will be stored in .glsl files
+    return
+                "#version 330 core\n"
+                "layout (location = 0) in vec3 aPos;"
+                "layout (location = 1) in vec3 aColor;"
+                ""
+                "uniform mat4 worldMatrix;" // expose world matrix
+                "uniform mat4 viewMatrix = mat4(1.0);" // expose view matrix
+                "uniform mat4 projectionMatrix = mat4(1.0);"
+                ""
+                "out vec3 vertexColor;"
+                "void main()"
+                "{"
+                "   vertexColor = aColor;"
+                "   mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;"
+                "   gl_Position = modelViewProjection * vec4( aPos.x, aPos.y, aPos.z, 1.0);"
+                "}";
+}
+
+
+const char* getFragmentShaderSource()
+{
+    return
+                "#version 330 core\n"
+                "in vec3 vertexColor;"
+                "out vec4 FragColor;"
+                "void main()"
+                "{"
+                "   FragColor = vec4(vertexColor.r, vertexColor.g, vertexColor.b, 1.0f);"
+                "}";
+}
+
+glm::vec3 squareArray[] = {
+    // First Triangle
+    glm::vec3(-0.5f, -0.5f, 0.0f),
+    glm::vec3( 1.0f,  0.0f, 0.0f),
+    glm::vec3( 0.5f,  0.5f, 0.0f),
+    glm::vec3( 0.0f,  1.0f, 0.0f),
+    glm::vec3(-0.5f,  0.5f, 0.0f),
+    glm::vec3( 0.0f,  0.0f, 1.0f),
+
+    // Second Triangle
+    glm::vec3( 0.5f, -0.5f, 0.0f),
+    glm::vec3( 1.0f,  1.0f, 0.0f),
+    glm::vec3( 0.5f,  0.5f, 0.0f),
+    glm::vec3( 0.0f,  1.0f, 0.0f),
+    glm::vec3(-0.5f, -0.5f, 0.0f),
+    glm::vec3( 1.0f,  0.0f, 0.0f),
+};
+
+
+int compileAndLinkShaders()
+{
+    // compile and link shader program
+    // return shader program id
+    // ------------------------------------
+
+    // vertex shader
+    int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    const char* vertexShaderSource = getVertexShaderSource();
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+    
+    // check for shader compile errors
+    int success;
+    char infoLog[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        std::cerr << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+    }
+    
+    // fragment shader
+    int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    const char* fragmentShaderSource = getFragmentShaderSource();
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+    
+    // check for shader compile errors
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        std::cerr << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+    }
+    
+    // link shaders
+    int shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+
+    glm::mat4 projectionMatrix = glm::perspective(glm::radians(45.0f),
+                                            800.0f/600.0f,
+                                            0.1f, 100.0f);
+    GLuint projectionMatrixLocation = glGetUniformLocation(shaderProgram, "projectionMatrix");
+    glUseProgram(shaderProgram);
+    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+    
+    // check for linking errors
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+    }
+    
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    
+    return shaderProgram;
+}
+
+int createVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
+{
+    // Create a vertex array
+    GLuint vertexArrayObject;
+    glGenVertexArrays(1, &vertexArrayObject);
+    glBindVertexArray(vertexArrayObject);
+
+    // Upload Vertex Buffer to the GPU, keep a reference to it (vertexBufferObject)
+    GLuint vertexBufferObject;
+    glGenBuffers(1, &vertexBufferObject);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObject);
+    glBufferData(GL_ARRAY_BUFFER, arraySize, vertexArray, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0,                   // attribute 0 matches aPos in Vertex Shader
+                          3,                   // size
+                          GL_FLOAT,            // type
+                          GL_FALSE,            // normalized?
+                          2*sizeof(glm::vec3), // stride - each vertex contain 2 vec3 (position, color)
+                          (void*)0             // array buffer offset
+                          );
+    glEnableVertexAttribArray(0);
+
+
+    glVertexAttribPointer(1,                            // attribute 1 matches aColor in Vertex Shader
+                          3,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          2*sizeof(glm::vec3),
+                          (void*)sizeof(glm::vec3)      // color is offseted a vec3 (comes after position)
+                          );
+    glEnableVertexAttribArray(1);
+
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glBindVertexArray(0);
+
+  return vertexArrayObject;
+}
+
+void mouse_callback (GLFWwindow* window, double xpos, double ypos) {
+   if(firstMouse){
+    lastX = xpos;
+    lastY = ypos;
+    firstMouse = false;
+   }
+
+   float xoffset = xpos - lastX;
+   float yoffset = lastY - ypos;
+   lastX = xpos;
+   lastY = ypos;
+
+   float sensitivity = 0.1f; // can be adjusted
+   xoffset *= sensitivity;
+   yoffset *= sensitivity;
+
+   yaw += xoffset;
+   pitch += yoffset;
+
+   // make sure the pitch doesnt go out of bounds, screen does not get flipped
+   if(pitch > 89.0f){
+    pitch = 89.0f;
+   }
+   if(pitch < -89.0f){
+    pitch = -89.0f;
+   }
+
+   vec3 front;
+   front.x = cos(radians(yaw)) * cos(radians(pitch));
+   front.y = sin(radians(pitch));
+   front.z = sin(radians(yaw)) * cos(radians(pitch));
+   cameraFront = normalize(front);
+}
+
+
+int main(int argc, char*argv[])
+{
+    // Initialize GLFW and OpenGL version
+    glfwInit();
+    
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+
+    // Create Window and rendering context using GLFW, resolution is 800x600
+    GLFWwindow* window = glfwCreateWindow(800, 600, "Comp371 - Lab 02", NULL, NULL);
+    if (window == NULL)
+    {
+        std::cerr << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+    glfwMakeContextCurrent(window);
+
+    // tell glfw to retrieve the mouse
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+    // set mouse pos to center
+    glfwSetCursorPos(window, 400.0, 300.0); // Center of your 800x600 window
+
+    glfwSetCursorPosCallback(window, mouse_callback);
+    // glfwSetScrollCallback(window, scroll_callback);
+    
+
+    // Initialize GLEW
+    glewExperimental = true; // Needed for core profile
+    if (glewInit() != GLEW_OK) {
+        std::cerr << "Failed to create GLEW" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+
+    // Other OpenGL states to set once
+    // Enable Backface culling
+   // glEnable(GL_CULL_FACE);
+    
+    // Enable Depth Test
+    //glEnable(GL_DEPTH_TEST); 
+
+    // Add the GL_DEPTH_BUFFER_BIT to glClear
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Black background
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    
+    // Compile and link shaders here ...
+    int shaderProgram = compileAndLinkShaders();
+    
+    // Define and upload geometry to the GPU here ...
+    int squareAO = createVertexArrayObject(squareArray, sizeof(squareArray));
+    
+    // Variables to be used later in tutorial
+    float angle = 0;
+    float rotationSpeed = 180.0f;  // 180 degrees per second
+
+    
+
+    // Entering Main Loop
+    while(!glfwWindowShouldClose(window))
+    {
+        // Each frame, reset color of each pixel to glClearColor
+        glClear(GL_COLOR_BUFFER_BIT);
+        
+        // Draw geometry
+        glUseProgram(shaderProgram);
+
+        glm::mat4 viewMatrix;
+        viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    
+        GLuint viewMatrixLocation = glGetUniformLocation(shaderProgram, "viewMatrix");
+        glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
+        //Draw Rectangle
+        glBindVertexArray(squareAO);
+
+        // determining the timestep (frame duration) 
+        
+        float currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        // increase rotation angle based on rotation speed and timestep
+        angle = (angle + rotationSpeed * deltaTime); // note: angle is in deg, but glm expects rad (conversion below)
+        glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(angle),glm::vec3(0.0f,1.0f,0.01));
+        
+        // create rotation matrix around y axis and bind to vertex shader
+        GLuint worldMatrixLocation = glGetUniformLocation(shaderProgram, "worldMatrix");
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &rotationMatrix[0][0]);
+
+        // draw the model
+        glDrawArrays(GL_TRIANGLES, 0, 6); // 6 vertices, starting at index 0
+        
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+        
+        // Handle inputs
+
+        // escape
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+            glfwSetWindowShouldClose(window, true);
+   
+        float cameraSpeed = 2.5 * deltaTime; // adjust accordingly
+
+        // camera movement
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameraPos += cameraSpeed * cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameraPos -= cameraSpeed * cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+
+    }
+
+    
+    // Shutdown GLFW
+    glfwTerminate();
+    
+    return 0;
+}
+
