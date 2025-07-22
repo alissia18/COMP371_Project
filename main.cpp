@@ -19,7 +19,7 @@ using namespace glm;
 using namespace std;
 
 // camera movement
-vec3 cameraPos   = vec3(0.0f, 0.0f,  10.0f);
+vec3 cameraPos   = vec3(0.0f, 1.0f,  10.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
 vec3 cameraUp = vec3(0.0f, 1.0f, 0.0f);
 float yaw = -90.0f; // initialized to -90 because 0 results in pointing to the right, -90 makes it forward
@@ -64,9 +64,12 @@ const char* getFragmentShaderSource()
                 "#version 330 core\n"
                 "in vec3 vertexColor;"
                 "out vec4 FragColor;"
+                ""
+                "uniform float alpha;"
+                ""
                 "void main()"
                 "{"
-                "   FragColor = vec4(vertexColor.r, vertexColor.g, vertexColor.b, 1.0f);"
+                "   FragColor = vec4(vertexColor, alpha);"
                 "}";
 }
 
@@ -325,6 +328,10 @@ int main(int argc, char*argv[])
         return -1;
     }
 
+    // Enable alpha blending (for transparency)
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     // Other OpenGL states to set once
     // Enable Backface culling
    // glEnable(GL_CULL_FACE);
@@ -340,6 +347,9 @@ int main(int argc, char*argv[])
     
     // Compile and link shaders here ...
     int shaderProgram = compileAndLinkShaders();
+
+    // alpha location
+    GLuint alphaLocation = glGetUniformLocation(shaderProgram, "alpha");
     
     // Define and upload geometry to the GPU here ...
     int squareAO = createVertexArrayObject(squareArray, sizeof(squareArray));
@@ -397,6 +407,7 @@ int main(int argc, char*argv[])
         //glDrawArrays(GL_TRIANGLES, 0, 6); // 6 vertices, starting at index 0 // commented out
 
         // Draw ground
+        glUniform1f(alphaLocation, 1.0f);
         glm::mat4 groundWorldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.01f, 0.0f)) *
                                       glm::scale(glm::mat4(1.0f), glm::vec3(1000.0f, 0.02f, 1000.0f));
 
@@ -405,6 +416,7 @@ int main(int argc, char*argv[])
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
         // Draw mushroom planes
+        glUniform1f(alphaLocation, 0.5f); // 50% transparent
         glBindVertexArray(mushroomPlaneVAO);
         for (int i = 0; i < 6; ++i) {
             glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]);
