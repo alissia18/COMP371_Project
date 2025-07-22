@@ -1,5 +1,5 @@
 // COMP371 Assignment 1
-// By Alissia Bocarro and 
+// By Alissia Bocarro and Shania Filosi
 
 #include <iostream>
 
