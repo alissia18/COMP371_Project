@@ -19,7 +19,7 @@ using namespace glm;
 using namespace std;
 
 // camera movement
-vec3 cameraPos   = vec3(0.0f, 0.0f,  3.0f);
+vec3 cameraPos   = vec3(0.0f, 1.0f,  10.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
 vec3 cameraUp = vec3(0.0f, 1.0f, 0.0f);
 float yaw = -90.0f; // initialized to -90 because 0 results in pointing to the right, -90 makes it forward
@@ -86,6 +86,57 @@ glm::vec3 squareArray[] = {
     glm::vec3( 0.0f,  1.0f, 0.0f),
     glm::vec3(-0.5f, -0.5f, 0.0f),
     glm::vec3( 1.0f,  0.0f, 0.0f),
+};
+
+// Cube model
+vec3 cubeArray[] = {  // position,                            color
+    vec3(-0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f), //left - red
+    vec3(-0.5f,-0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
+        
+    vec3(-0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f),
+        
+    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f), // far - blue
+    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+        
+    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+    vec3( 0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+        
+    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f), // bottom - turquoise
+    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
+    vec3( 0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
+        
+    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f),
+    vec3(-0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f),
+    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
+        
+    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f), // near - green
+    vec3(-0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+        
+    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+        
+    vec3( 0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f), // right - purple
+    vec3( 0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
+    vec3( 0.5f, 0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
+        
+    vec3( 0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
+    vec3( 0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f),
+    vec3( 0.5f,-0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f),
+        
+    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f), // top - dark swampy green
+    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
+        
+    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f)
 };
 
 
@@ -280,6 +331,8 @@ int main(int argc, char*argv[])
     
     // Define and upload geometry to the GPU here ...
     int squareAO = createVertexArrayObject(squareArray, sizeof(squareArray));
+
+    int groundVAO = createVertexArrayObject(cubeArray, sizeof(cubeArray));
     
     // Variables to be used later in tutorial
     float angle = 0;
@@ -312,14 +365,23 @@ int main(int argc, char*argv[])
 
         // increase rotation angle based on rotation speed and timestep
         angle = (angle + rotationSpeed * deltaTime); // note: angle is in deg, but glm expects rad (conversion below)
-        glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(angle),glm::vec3(0.0f,1.0f,0.01));
+        glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f)); // move square half a unit up
         
         // create rotation matrix around y axis and bind to vertex shader
         GLuint worldMatrixLocation = glGetUniformLocation(shaderProgram, "worldMatrix");
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &rotationMatrix[0][0]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &translationMatrix[0][0]);
 
         // draw the model
         glDrawArrays(GL_TRIANGLES, 0, 6); // 6 vertices, starting at index 0
+
+        // Draw ground
+        glm::mat4 groundWorldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.01f, 0.0f)) *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(1000.0f, 0.02f, 1000.0f));
+
+        glBindVertexArray(groundVAO);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
         
         glfwSwapBuffers(window);
         glfwPollEvents();
