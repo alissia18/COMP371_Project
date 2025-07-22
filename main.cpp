@@ -19,7 +19,7 @@ using namespace glm;
 using namespace std;
 
 // camera movement
-vec3 cameraPos   = vec3(0.0f, 0.0f,  3.0f);
+vec3 cameraPos   = vec3(0.0f, 1.0f,  10.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
 vec3 cameraUp = vec3(0.0f, 1.0f, 0.0f);
 float yaw = -90.0f; // initialized to -90 because 0 results in pointing to the right, -90 makes it forward
@@ -64,9 +64,12 @@ const char* getFragmentShaderSource()
                 "#version 330 core\n"
                 "in vec3 vertexColor;"
                 "out vec4 FragColor;"
+                ""
+                "uniform float alpha;"
+                ""
                 "void main()"
                 "{"
-                "   FragColor = vec4(vertexColor.r, vertexColor.g, vertexColor.b, 1.0f);"
+                "   FragColor = vec4(vertexColor, alpha);"
                 "}";
 }
 
@@ -86,6 +89,69 @@ glm::vec3 squareArray[] = {
     glm::vec3( 0.0f,  1.0f, 0.0f),
     glm::vec3(-0.5f, -0.5f, 0.0f),
     glm::vec3( 1.0f,  0.0f, 0.0f),
+};
+
+// Cube model
+vec3 cubeArray[] = {  // position,                            color
+    vec3(-0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f), //left - red
+    vec3(-0.5f,-0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
+        
+    vec3(-0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f),
+        
+    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f), // far - blue
+    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+        
+    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+    vec3( 0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
+        
+    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f), // bottom - turquoise
+    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
+    vec3( 0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
+        
+    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f),
+    vec3(-0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f),
+    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
+        
+    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f), // near - green
+    vec3(-0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+        
+    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
+        
+    vec3( 0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f), // right - purple
+    vec3( 0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
+    vec3( 0.5f, 0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
+        
+    vec3( 0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
+    vec3( 0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f),
+    vec3( 0.5f,-0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f),
+        
+    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f), // top - dark swampy green
+    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
+        
+    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f)
+};
+
+glm::vec3 mushroomPlane[] = {
+    // Triangle 1
+    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), // bottom-left
+    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), // top-right
+    glm::vec3(-1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), // top-left
+
+    // Triangle 2
+    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f),
+    glm::vec3( 1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f),
+    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f),
 };
 
 
@@ -262,6 +328,10 @@ int main(int argc, char*argv[])
         return -1;
     }
 
+    // Enable alpha blending (for transparency)
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     // Other OpenGL states to set once
     // Enable Backface culling
    // glEnable(GL_CULL_FACE);
@@ -277,10 +347,25 @@ int main(int argc, char*argv[])
     
     // Compile and link shaders here ...
     int shaderProgram = compileAndLinkShaders();
+
+    // alpha location
+    GLuint alphaLocation = glGetUniformLocation(shaderProgram, "alpha");
     
     // Define and upload geometry to the GPU here ...
     int squareAO = createVertexArrayObject(squareArray, sizeof(squareArray));
-    
+    int groundVAO = createVertexArrayObject(cubeArray, sizeof(cubeArray));
+    int mushroomPlaneVAO = createVertexArrayObject(mushroomPlane, sizeof(mushroomPlane));
+
+    // Mushroom positions
+    glm::vec3 mushroomPositions[] = {
+        glm::vec3(-5.0f, 0.0f, -5.0f),  // left front
+        glm::vec3( 0.0f, 0.0f, -6.0f),  // center front
+        glm::vec3( 5.0f, 0.0f, -5.0f),  // right front
+        glm::vec3(-4.0f, 0.0f, -10.0f), // left middle
+        glm::vec3(-3.0f, 0.0f, -11.0f), // left back
+        glm::vec3( 4.0f, 0.0f, -10.0f), // right back
+    };
+
     // Variables to be used later in tutorial
     float angle = 0;
     float rotationSpeed = 180.0f;  // 180 degrees per second
@@ -302,7 +387,7 @@ int main(int argc, char*argv[])
         GLuint viewMatrixLocation = glGetUniformLocation(shaderProgram, "viewMatrix");
         glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
         //Draw Rectangle
-        glBindVertexArray(squareAO);
+        //glBindVertexArray(squareAO); // commented out
 
         // determining the timestep (frame duration) 
         
@@ -312,14 +397,34 @@ int main(int argc, char*argv[])
 
         // increase rotation angle based on rotation speed and timestep
         angle = (angle + rotationSpeed * deltaTime); // note: angle is in deg, but glm expects rad (conversion below)
-        glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(angle),glm::vec3(0.0f,1.0f,0.01));
+        glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f)); // move square half a unit up
         
         // create rotation matrix around y axis and bind to vertex shader
         GLuint worldMatrixLocation = glGetUniformLocation(shaderProgram, "worldMatrix");
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &rotationMatrix[0][0]);
+        //glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &translationMatrix[0][0]); // commented out
 
         // draw the model
-        glDrawArrays(GL_TRIANGLES, 0, 6); // 6 vertices, starting at index 0
+        //glDrawArrays(GL_TRIANGLES, 0, 6); // 6 vertices, starting at index 0 // commented out
+
+        // Draw ground
+        glUniform1f(alphaLocation, 1.0f);
+        glm::mat4 groundWorldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.01f, 0.0f)) *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(1000.0f, 0.02f, 1000.0f));
+
+        glBindVertexArray(groundVAO);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // Draw mushroom planes
+        glUniform1f(alphaLocation, 0.5f); // 50% transparent
+        glBindVertexArray(mushroomPlaneVAO);
+        for (int i = 0; i < 6; ++i) {
+            glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]);
+
+            glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
+
         
         glfwSwapBuffers(window);
         glfwPollEvents();
