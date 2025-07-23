@@ -13,7 +13,24 @@
 #include <glm/glm.hpp>  // GLM is an optimized math library with syntax to similar to OpenGL Shading Language
 #include <glm/gtc/matrix_transform.hpp> // include this to create transformation matrices
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 void mouse_callback (GLFWwindow* window, double xpos, double ypos);
+
+GLuint loadTexture(const char *filename);
+
+const char* getVertexShaderSource();
+
+const char* getFragmentShaderSource();
+
+const char* getTexturedVertexShaderSource();
+
+const char* getTexturedFragmentShaderSource();
+
+int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize);
+
+int compileAndLinkShaders(const char* vertexShaderSource, const char* fragmentShaderSource);
 
 using namespace glm;
 using namespace std;
@@ -71,6 +88,47 @@ const char* getFragmentShaderSource()
                 "{"
                 "   FragColor = vec4(vertexColor, alpha);"
                 "}";
+}
+
+const char* getTexturedVertexShaderSource()
+{
+    return
+    "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;"
+    "layout (location = 1) in vec3 aColor;"
+    "layout (location = 2) in vec2 aUV;"
+    ""
+    "uniform mat4 worldMatrix;"
+    "uniform mat4 viewMatrix = mat4(1.0);"  // default value for view matrix (identity)
+    "uniform mat4 projectionMatrix = mat4(1.0);"
+    ""
+    "out vec3 vertexColor;"
+    "out vec2 vertexUV;"
+    ""
+    "void main()"
+    "{"
+    "   vertexColor = aColor;"
+    "   mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;"
+    "   gl_Position = modelViewProjection * vec4(aPos.x, aPos.y, aPos.z, 1.0);"
+    "   vertexUV = aUV;"
+    "}";
+}
+
+const char* getTexturedFragmentShaderSource()
+{
+    return 
+    "#version 330 core\n"
+    "in vec3 vertexColor;"
+    "in vec2 vertexUV;"
+    "uniform sampler2D textureSampler;"
+    "uniform float alpha = 1.0;" // Add alpha uniform with default value
+    ""
+    "out vec4 FragColor;"
+    "void main()"
+    "{"
+    "   vec4 textureColor = texture( textureSampler, vertexUV );"
+    "   FragColor = vec4(textureColor.rgb, textureColor.a * alpha);" // Use texture's alpha multiplied by uniform alpha
+    "}";
 }
 
 glm::vec3 squareArray[] = {
@@ -144,18 +202,18 @@ vec3 cubeArray[] = {  // position,                            color
 
 glm::vec3 mushroomPlane[] = {
     // Triangle 1
-    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), // bottom-left
-    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), // top-right
-    glm::vec3(-1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), // top-left
+    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
+    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
+    glm::vec3(-1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), // top-left (U=0, V=0) - FLIPPED V
 
     // Triangle 2
-    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f),
-    glm::vec3( 1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f),
-    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f),
+    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
+    glm::vec3( 1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), // bottom-right (U=1, V=1) - FLIPPED V
+    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
 };
 
 
-int compileAndLinkShaders()
+int compileAndLinkShaders(const char* vertexShaderSource, const char* fragmentShaderSource)
 {
     // compile and link shader program
     // return shader program id
@@ -163,7 +221,6 @@ int compileAndLinkShaders()
 
     // vertex shader
     int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    const char* vertexShaderSource = getVertexShaderSource();
     glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
     glCompileShader(vertexShader);
     
@@ -179,7 +236,6 @@ int compileAndLinkShaders()
     
     // fragment shader
     int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    const char* fragmentShaderSource = getFragmentShaderSource();
     glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
     
@@ -196,13 +252,6 @@ int compileAndLinkShaders()
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
-
-    glm::mat4 projectionMatrix = glm::perspective(glm::radians(45.0f),
-                                            800.0f/600.0f,
-                                            0.1f, 100.0f);
-    GLuint projectionMatrixLocation = glGetUniformLocation(shaderProgram, "projectionMatrix");
-    glUseProgram(shaderProgram);
-    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
     
     // check for linking errors
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
@@ -342,19 +391,24 @@ int main(int argc, char*argv[])
     // Add the GL_DEPTH_BUFFER_BIT to glClear
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+      // Load Textures
+      GLuint mushroom1TextureID = loadTexture("Textures/mushroom.png");
+      GLuint flowerTextureID = loadTexture("Textures/flower.png");
+
     // Black background
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     
     // Compile and link shaders here ...
-    int shaderProgram = compileAndLinkShaders();
+    int colorShaderProgram = compileAndLinkShaders(getVertexShaderSource(), getFragmentShaderSource());
+    int texturedShaderProgram = compileAndLinkShaders(getTexturedVertexShaderSource(), getTexturedFragmentShaderSource());
 
     // alpha location
-    GLuint alphaLocation = glGetUniformLocation(shaderProgram, "alpha");
+    GLuint alphaLocation = glGetUniformLocation(colorShaderProgram, "alpha");
     
     // Define and upload geometry to the GPU here ...
     int squareAO = createVertexArrayObject(squareArray, sizeof(squareArray));
     int groundVAO = createVertexArrayObject(cubeArray, sizeof(cubeArray));
-    int mushroomPlaneVAO = createVertexArrayObject(mushroomPlane, sizeof(mushroomPlane));
+    int mushroomPlaneVAO = createTexturedVertexArrayObject(mushroomPlane, sizeof(mushroomPlane));
 
     // Mushroom positions
     glm::vec3 mushroomPositions[] = {
@@ -370,7 +424,8 @@ int main(int argc, char*argv[])
     float angle = 0;
     float rotationSpeed = 180.0f;  // 180 degrees per second
 
-    
+    // ADD THIS HERE - BEFORE the while loop:
+    glm::mat4 projectionMatrix = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
 
     // Entering Main Loop
     while(!glfwWindowShouldClose(window))
@@ -378,13 +433,17 @@ int main(int argc, char*argv[])
         // Each frame, reset color of each pixel to glClearColor
         glClear(GL_COLOR_BUFFER_BIT);
         
-        // Draw geometry
-        glUseProgram(shaderProgram);
+        // Draw color geometry
+        glUseProgram(colorShaderProgram);
+
+        //Set projection matrix for color shader:
+        GLuint projectionMatrixLocation = glGetUniformLocation(colorShaderProgram, "projectionMatrix");
+        glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 
         glm::mat4 viewMatrix;
         viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
     
-        GLuint viewMatrixLocation = glGetUniformLocation(shaderProgram, "viewMatrix");
+        GLuint viewMatrixLocation = glGetUniformLocation(colorShaderProgram, "viewMatrix");
         glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
         //Draw Rectangle
         //glBindVertexArray(squareAO); // commented out
@@ -400,7 +459,7 @@ int main(int argc, char*argv[])
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f)); // move square half a unit up
         
         // create rotation matrix around y axis and bind to vertex shader
-        GLuint worldMatrixLocation = glGetUniformLocation(shaderProgram, "worldMatrix");
+        GLuint worldMatrixLocation = glGetUniformLocation(colorShaderProgram, "worldMatrix");
         //glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &translationMatrix[0][0]); // commented out
 
         // draw the model
@@ -415,8 +474,31 @@ int main(int argc, char*argv[])
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
+        // Draw textured geometry
+        glUseProgram(texturedShaderProgram);
+
+        // Get alpha location from textured shader program
+        //GLuint texturedAlphaLocation = glGetUniformLocation(texturedShaderProgram, "alpha");
+
+        //Set projection matrix for textured shader:
+        GLuint texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
+        glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+
+        // Set view matrix for textured shader too
+        GLuint texturedViewMatrixLocation = glGetUniformLocation(texturedShaderProgram, "viewMatrix");
+        glUniformMatrix4fv(texturedViewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
+
+        // Get world matrix location for textured shader
+        worldMatrixLocation = glGetUniformLocation(texturedShaderProgram, "worldMatrix");
+
+        glActiveTexture(GL_TEXTURE0);
+        GLuint textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
+        glBindTexture(GL_TEXTURE_2D, mushroom1TextureID);
+        glUniform1i(textureLocation, 0);                // Set our Texture sampler to user Texture Unit 0
+
         // Draw mushroom planes
-        glUniform1f(alphaLocation, 0.5f); // 50% transparent
+        //glUniform1f(texturedAlphaLocation, 1.0f); // Now use the correct alpha location
+
         glBindVertexArray(mushroomPlaneVAO);
         for (int i = 0; i < 6; ++i) {
             glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]);
@@ -424,7 +506,6 @@ int main(int argc, char*argv[])
             glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
             glDrawArrays(GL_TRIANGLES, 0, 6);
         }
-
         
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -454,5 +535,71 @@ int main(int argc, char*argv[])
     glfwTerminate();
     
     return 0;
+}
+
+GLuint loadTexture(const char *filename)
+{
+    // load textures with dimension data
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load(filename, &width, &height, &nrChannels, 0);
+    if(!data){
+        cerr << "Error: texture could not load texture file: " << filename << endl;
+        return 0;
+    }
+
+    // create and bind texturess
+    GLuint textureId = 0;
+    glGenTextures(1, &textureId);
+    assert(textureId != 0);
+
+    glBindTexture(GL_TEXTURE_2D, textureId);
+
+    // set filter parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // upload texture to the PU
+    GLenum format = 0;
+    if(nrChannels == 1) format = GL_RED;
+    else if(nrChannels == 3) format = GL_RGB;
+    else if(nrChannels == 4) format = GL_RGBA;
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+    // free resources
+    stbi_image_free(data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return textureId;
+    
+}
+
+int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
+{
+    // Create a vertex array
+    GLuint vertexArrayObject;
+    glGenVertexArrays(1, &vertexArrayObject);
+    glBindVertexArray(vertexArrayObject);
+
+    // Upload Vertex Buffer to the GPU
+    GLuint vertexBufferObject;
+    glGenBuffers(1, &vertexBufferObject);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObject);
+    glBufferData(GL_ARRAY_BUFFER, arraySize, vertexArray, GL_STATIC_DRAW);
+
+    // Position attribute (location 0)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Color attribute (location 1)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3*sizeof(glm::vec3), (void*)sizeof(glm::vec3));
+    glEnableVertexAttribArray(1);
+
+    // UV coordinate attribute (location 2) - Note: using only X and Y components
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 3*sizeof(glm::vec3), (void*)(2*sizeof(glm::vec3)));
+    glEnableVertexAttribArray(2);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return vertexArrayObject;
 }
 
