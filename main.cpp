@@ -213,6 +213,29 @@ glm::vec3 mushroomPlane[] = {
     glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
 };
 
+glm::vec3 flowerPlane[] = {
+    // Triangle 1
+    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
+    glm::vec3( 0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
+    glm::vec3(-0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), // top-left (U=0, V=0) - FLIPPED V
+
+    // Triangle 2
+    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
+    glm::vec3( 0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), // bottom-right (U=1, V=1) - FLIPPED V
+    glm::vec3( 0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
+};
+
+glm::vec3 dragonflyPlane[] = {
+    // Triangle 1
+    glm::vec3(-0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
+    glm::vec3( 0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
+    glm::vec3(-0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), // top-left (U=0, V=0) - FLIPPED V
+
+    // Triangle 2
+    glm::vec3(-0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
+    glm::vec3( 0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), // bottom-right (U=1, V=1) - FLIPPED V
+    glm::vec3( 0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
+};
 
 int compileAndLinkShaders(const char* vertexShaderSource, const char* fragmentShaderSource)
 {
@@ -325,12 +348,12 @@ void mouse_callback (GLFWwindow* window, double xpos, double ypos) {
    pitch += yoffset;
 
    // make sure the pitch doesnt go out of bounds, screen does not get flipped
-   if(pitch > 89.0f){
-    pitch = 89.0f;
-   }
-   if(pitch < -89.0f){
-    pitch = -89.0f;
-   }
+  //if(pitch > 179.0f){
+  //  pitch = 179.0f;
+   //}
+   //if(pitch < -179.0f){
+   // pitch = -179.0f;
+   //}
 
    vec3 front;
    front.x = cos(radians(yaw)) * cos(radians(pitch));
@@ -394,6 +417,8 @@ int main(int argc, char*argv[])
       // Load Textures
       GLuint mushroom1TextureID = loadTexture("Textures/mushroom.png");
       GLuint flowerTextureID = loadTexture("Textures/flower.png");
+      GLuint dragonflyBodyTextureID = loadTexture("Textures/dragonfly.png");
+      GLuint wingTextureID = loadTexture("Textures/wings.png");
 
     // Black background
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -409,16 +434,23 @@ int main(int argc, char*argv[])
     int squareAO = createVertexArrayObject(squareArray, sizeof(squareArray));
     int groundVAO = createVertexArrayObject(cubeArray, sizeof(cubeArray));
     int mushroomPlaneVAO = createTexturedVertexArrayObject(mushroomPlane, sizeof(mushroomPlane));
+    int flowerPlaneVAO = createTexturedVertexArrayObject(flowerPlane, sizeof(flowerPlane));
+    int dragonflyPlaneVAO = createTexturedVertexArrayObject(dragonflyPlane, sizeof(dragonflyPlane));
 
     // Mushroom positions
     glm::vec3 mushroomPositions[] = {
-        glm::vec3(-5.0f, 0.0f, -5.0f),  // left front
-        glm::vec3( 0.0f, 0.0f, -6.0f),  // center front
-        glm::vec3( 5.0f, 0.0f, -5.0f),  // right front
-        glm::vec3(-4.0f, 0.0f, -10.0f), // left middle
-        glm::vec3(-3.0f, 0.0f, -11.0f), // left back
-        glm::vec3( 4.0f, 0.0f, -10.0f), // right back
+        glm::vec3(-6.0f, 0.0f, 1.0f),  // left front
+        glm::vec3( -7.0f, 0.0f, 3.0f),  // left middle
+        glm::vec3( -8.0f, 0.0f, 5.0f),  // left back
+        glm::vec3(-3.0f, 0.0f, 1.0f), // right front
+        glm::vec3(-2.0f, 0.0f, 3.0f), // right middle
+        glm::vec3(-1.0f, 0.0f, 5.0f), // right back
     };
+
+    vec3 flowerPosition = vec3(-2.0f, 0.0f, 8.0f);
+    vec3 dragonflyPosition = vec3(-2.25f, 0.35f, 8.01f);
+    vec3 wingPositionFront = vec3(-2.15f,0.43f, 8.02f);
+    vec3 wingPositionBack = vec3(-2.15f,0.43f, 7.98f);
 
     // Variables to be used later in tutorial
     float angle = 0;
@@ -507,7 +539,42 @@ int main(int argc, char*argv[])
             glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
             glDrawArrays(GL_TRIANGLES, 0, 6);
         }
+
+        // draw flower
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, flowerTextureID);
+        glUniform1i(textureLocation, 0);  
         
+        glBindVertexArray(flowerPlaneVAO);
+        mat4 flowerMatrix = translate(mat4(1.0f), flowerPosition);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &flowerMatrix[0][0]);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        // draw dragonfly
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, dragonflyBodyTextureID);
+        glUniform1i(textureLocation, 0);  
+        
+        glBindVertexArray(dragonflyPlaneVAO);
+        mat4 dragonflyMatrix = translate(mat4(1.0f), dragonflyPosition);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyMatrix[0][0]);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        // draw wings
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, wingTextureID);
+        glUniform1i(textureLocation, 0);  
+
+        mat4 dragonflyWingMatrix = translate(mat4(1.0f), wingPositionFront);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWingMatrix[0][0]);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        dragonflyWingMatrix = translate(mat4(1.0f), wingPositionBack);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWingMatrix[0][0]);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
         
