@@ -127,6 +127,7 @@ const char* getTexturedFragmentShaderSource()
     "void main()"
     "{"
     "   vec4 textureColor = texture( textureSampler, vertexUV );"
+    "   if(textureColor.a < 0.5) discard;"
     "   FragColor = vec4(textureColor.rgb, textureColor.a * alpha);" // Use texture's alpha multiplied by uniform alpha
     "}";
 }
@@ -384,12 +385,11 @@ int main(int argc, char*argv[])
     // Other OpenGL states to set once
     // Enable Backface culling
    // glEnable(GL_CULL_FACE);
+
+   glfwWindowHint(GL_DEPTH_BITS, 24);
     
     // Enable Depth Test
-    //glEnable(GL_DEPTH_TEST); 
-
-    // Add the GL_DEPTH_BUFFER_BIT to glClear
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST); 
 
       // Load Textures
       GLuint mushroom1TextureID = loadTexture("Textures/mushroom.png");
@@ -431,7 +431,8 @@ int main(int argc, char*argv[])
     while(!glfwWindowShouldClose(window))
     {
         // Each frame, reset color of each pixel to glClearColor
-        glClear(GL_COLOR_BUFFER_BIT);
+        // Add the GL_DEPTH_BUFFER_BIT to glClear
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         // Draw color geometry
         glUseProgram(colorShaderProgram);
