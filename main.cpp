@@ -420,8 +420,8 @@ int main(int argc, char*argv[])
       GLuint dragonflyBodyTextureID = loadTexture("Textures/dragonfly.png");
       GLuint wingTextureID = loadTexture("Textures/wings.png");
 
-    // Black background
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    // Background color
+    glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
     
     // Compile and link shaders here ...
     int colorShaderProgram = compileAndLinkShaders(getVertexShaderSource(), getFragmentShaderSource());
@@ -488,7 +488,7 @@ int main(int argc, char*argv[])
         lastFrame = currentFrame;
 
         // increase rotation angle based on rotation speed and timestep
-        angle = (angle + rotationSpeed * deltaTime); // note: angle is in deg, but glm expects rad (conversion below)
+        angle = 2.0f * sin(glfwGetTime()); // note: angle is in deg, but glm expects rad (conversion below)
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f)); // move square half a unit up
         
         // create rotation matrix around y axis and bind to vertex shader
@@ -540,39 +540,66 @@ int main(int argc, char*argv[])
             glDrawArrays(GL_TRIANGLES, 0, 6);
         }
 
-        // draw flower
+        // Define the stem offset relative to flower center
+        glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
 
+        // Convert rotation angle from degrees to radians
+        float angleRadians = glm::radians(angle);
+
+        // Build plant matrix with pivot at stem
+        glm::mat4 plantMatrix =
+            glm::translate(glm::mat4(1.0f), flowerPosition) *     // Move to flower world position
+            glm::translate(glm::mat4(1.0f), stemOffset) *          // Move pivot to stem
+            glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *  // Rotate around stem
+            glm::translate(glm::mat4(1.0f), -stemOffset);          // Move pivot back
+
+        // Draw flower
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, flowerTextureID);
-        glUniform1i(textureLocation, 0);  
-        
+        glUniform1i(textureLocation, 0);
+
         glBindVertexArray(flowerPlaneVAO);
-        mat4 flowerMatrix = translate(mat4(1.0f), flowerPosition);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &flowerMatrix[0][0]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        // draw dragonfly
+        // Draw dragonfly body relative to flower
+        glm::mat4 dragonflyLocalMatrix = glm::translate(glm::mat4(1.0f), dragonflyPosition - flowerPosition);
+        glm::mat4 dragonflyWorldMatrix = plantMatrix * dragonflyLocalMatrix;
 
-        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, dragonflyBodyTextureID);
-        glUniform1i(textureLocation, 0);  
-        
         glBindVertexArray(dragonflyPlaneVAO);
-        mat4 dragonflyMatrix = translate(mat4(1.0f), dragonflyPosition);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyMatrix[0][0]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWorldMatrix[0][0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        // draw wings
-        glActiveTexture(GL_TEXTURE0);
+        // Draw dragonfly wings relative to flower
+
+        // --- Animate front wing flapping ---
+
+        float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // only flaps outward
+        glm::vec3 wingOffsetFront = wingPositionFront - flowerPosition;
+
+        glm::mat4 wingFrontLocalMatrix =
+        glm::translate(glm::mat4(1.0f), wingOffsetFront) *                      // move to local space
+        glm::rotate(glm::mat4(1.0f), glm::radians(flapAngle), glm::vec3(1, 0, 0));  // flap around X axis
+
+        glm::mat4 wingFrontWorldMatrix = plantMatrix * wingFrontLocalMatrix;
+
         glBindTexture(GL_TEXTURE_2D, wingTextureID);
-        glUniform1i(textureLocation, 0);  
-
-        mat4 dragonflyWingMatrix = translate(mat4(1.0f), wingPositionFront);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWingMatrix[0][0]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingFrontWorldMatrix[0][0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        dragonflyWingMatrix = translate(mat4(1.0f), wingPositionBack);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWingMatrix[0][0]);
+        // --- Animate back wing flapping ---
+
+        float flapAngleBack = -12.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // flap back wing downward only
+        glm::vec3 wingOffsetBack = wingPositionBack - flowerPosition;
+
+        glm::mat4 wingBackLocalMatrix =
+        glm::translate(glm::mat4(1.0f), wingOffsetBack) *
+        glm::rotate(glm::mat4(1.0f), glm::radians(flapAngleBack), glm::vec3(1, 0, 0));  // flap around X axis
+
+        glm::mat4 wingBackWorldMatrix = plantMatrix * wingBackLocalMatrix;
+
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingBackWorldMatrix[0][0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
         glfwSwapBuffers(window);
@@ -670,4 +697,3 @@ int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
 
     return vertexArrayObject;
 }
-
