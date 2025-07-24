@@ -488,7 +488,7 @@ int main(int argc, char*argv[])
         lastFrame = currentFrame;
 
         // increase rotation angle based on rotation speed and timestep
-        angle = 20.0f * sin(glfwGetTime()); // note: angle is in deg, but glm expects rad (conversion below)
+        angle = 2.0f * sin(glfwGetTime()); // note: angle is in deg, but glm expects rad (conversion below)
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f)); // move square half a unit up
         
         // create rotation matrix around y axis and bind to vertex shader
@@ -550,7 +550,7 @@ int main(int argc, char*argv[])
         glm::mat4 plantMatrix =
             glm::translate(glm::mat4(1.0f), flowerPosition) *     // Move to flower world position
             glm::translate(glm::mat4(1.0f), stemOffset) *          // Move pivot to stem
-            glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 1, 0)) *  // Rotate around stem
+            glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *  // Rotate around stem
             glm::translate(glm::mat4(1.0f), -stemOffset);          // Move pivot back
 
         // Draw flower
@@ -575,7 +575,7 @@ int main(int argc, char*argv[])
 
         // --- Animate front wing flapping ---
 
-        float flapAngle = 12.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // only flaps outward
+        float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // only flaps outward
         glm::vec3 wingOffsetFront = wingPositionFront - flowerPosition;
 
         glm::mat4 wingFrontLocalMatrix =
