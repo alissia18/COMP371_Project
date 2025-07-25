@@ -414,13 +414,18 @@ int main(int argc, char*argv[])
     // Enable Depth Test
     glEnable(GL_DEPTH_TEST); 
 
-      // Load Textures
-      GLuint mushroom1TextureID = loadTexture("Textures/mushroom.png");
-      GLuint flowerTextureID = loadTexture("Textures/flower.png");
-      GLuint dragonflyBodyTextureID = loadTexture("Textures/dragonfly.png");
-      GLuint wingTextureID = loadTexture("Textures/wings.png");
-
-    // Background color
+    // Load Textures
+    GLuint mushroom1TextureID = loadTexture("Textures/mushroom.png");
+    GLuint mushroom2TextureID = loadTexture("Textures/mushroom2.png");
+    GLuint mushroom3TextureID = loadTexture("Textures/mushroom3.png");
+    GLuint mushroom4TextureID = loadTexture("Textures/mushroom4.png");
+    GLuint mushroom5TextureID = loadTexture("Textures/mushroom5.png");
+    GLuint mushroom6TextureID = loadTexture("Textures/mushroom6.png");
+    GLuint mushroomTextureIDs[] = {mushroom1TextureID, mushroom2TextureID, mushroom3TextureID, mushroom4TextureID, mushroom5TextureID, mushroom6TextureID};
+    GLuint flowerTextureID = loadTexture("Textures/flower.png");
+    GLuint waterTextureID = loadTexture("Textures/water.png");
+    GLuint dragonflyBodyTextureID = loadTexture("Textures/dragonfly.png");
+    GLuint wingTextureID = loadTexture("Textures/wings.png");
     glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
     
     // Compile and link shaders here ...
@@ -534,6 +539,8 @@ int main(int argc, char*argv[])
 
         glBindVertexArray(mushroomPlaneVAO);
         for (int i = 0; i < 6; ++i) {
+            glBindTexture(GL_TEXTURE_2D, mushroomTextureIDs[i]);
+            glUniform1i(textureLocation, 0);        
             glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]);
 
             glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
