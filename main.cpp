@@ -192,13 +192,75 @@ vec3 cubeArray[] = {  // position,                            color
     vec3( 0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f),
     vec3( 0.5f,-0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f),
         
-    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f), // top - dark swampy green
-    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
-    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
+    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.1f, 0.3f), // top - dark blue
+    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.1f, 0.3f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.1f, 0.3f),
         
-    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f),
-    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.3f, 0.1f),
-    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 0.3f, 0.1f)
+    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.1f, 0.3f),
+    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.1f, 0.3f),
+    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 0.1f, 0.3f)
+};
+
+glm::vec3 skyboxCube[] = {  
+    // LEFT FACE (X = -1) - column 0, row 1 (from bottom)
+    // Original V: 0.25-0.5, flipped to 0.5-0.25
+    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.5f, 0.0f),   // bottom-left (now top)
+    glm::vec3(-1.0f,  1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.25f, 0.0f),  // top-left (now bottom)
+    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.5f, 0.0f),  // bottom-right (now top)
+    
+    glm::vec3(-1.0f,  1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.25f, 0.0f),  // top-left (now bottom)
+    glm::vec3(-1.0f,  1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.25f, 0.0f), // top-right (now bottom)
+    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.5f, 0.0f), // bottom-right (now top)
+
+    // RIGHT FACE (X = +1) - column 2, row 1 (from bottom)
+    // Original V: 0.25-0.5, flipped to 0.5-0.25
+    glm::vec3(1.0f, -1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.5f, 0.0f),    // bottom-left (now top)
+    glm::vec3(1.0f,  1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.25f, 0.0f),   // top-left (now bottom)  
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.5f, 0.0f),   // bottom-right (now top)
+    
+    glm::vec3(1.0f,  1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.25f, 0.0f),   // top-left (now bottom)
+    glm::vec3(1.0f,  1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.25f, 0.0f),  // top-right (now bottom)
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.5f, 0.0f),   // bottom-right (now top)
+
+    // BOTTOM FACE (Y = -1) - column 1, row 2 (from bottom)
+    // Original V: 0.5-0.75, flipped to 0.75-0.5
+    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.75f, 0.0f), // bottom-left (now top)
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.75f, 0.0f),   // bottom-right (now top)
+    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.5f, 0.0f),  // top-left (now bottom)
+    
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.75f, 0.0f),   // bottom-right (now top)
+    glm::vec3(1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.5f, 0.0f),    // top-right (now bottom)
+    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.5f, 0.0f),  // top-left (now bottom)
+
+    // TOP FACE (Y = +1) - column 1, row 0 (from bottom)
+    // Original V: 0.0-0.25, flipped to 0.25-0.0
+    glm::vec3(-1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.25f, 0.0f),  // bottom-left (now top)
+    glm::vec3(1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.25f, 0.0f),    // bottom-right (now top)
+    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.0f, 0.0f),   // top-left (now bottom)
+    
+    glm::vec3(1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.25f, 0.0f),    // bottom-right (now top)
+    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.0f, 0.0f),     // top-right (now bottom)
+    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.0f, 0.0f),   // top-left (now bottom)
+
+    // FRONT FACE (Z = +1) - column 1, row 1 (from bottom)
+    // Original V: 0.25-0.5, flipped to 0.5-0.25
+    glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.5f, 0.0f),   // bottom-left (now top)
+    glm::vec3(1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.5f, 0.0f),     // bottom-right (now top)
+    glm::vec3(-1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.25f, 0.0f),   // top-left (now bottom)
+    
+    glm::vec3(1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.5f, 0.0f),     // bottom-right (now top)
+    glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.25f, 0.0f),     // top-right (now bottom)
+    glm::vec3(-1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.25f, 0.0f),   // top-left (now bottom)
+
+    // BACK FACE (Z = -1) - column 3, row 1 (from bottom)
+    // Original V: 0.25-0.5, flipped to 0.5-0.25
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.5f, 0.0f),   // bottom-left (now top)
+    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.5f, 0.0f),   // bottom-right (now top)
+    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.25f, 0.0f),   // top-left (now bottom)
+    
+    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.5f, 0.0f),   // bottom-right (now top)
+    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.25f, 0.0f),   // top-right (now bottom)
+    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.25f, 0.0f)    // top-left (now bottom)
 };
 
 glm::vec3 mushroomPlane[] = {
@@ -340,7 +402,7 @@ void mouse_callback (GLFWwindow* window, double xpos, double ypos) {
    lastX = xpos;
    lastY = ypos;
 
-   float sensitivity = 0.1f; // can be adjusted
+   float sensitivity = 0.4f; // can be adjusted
    xoffset *= sensitivity;
    yoffset *= sensitivity;
 
@@ -426,6 +488,7 @@ int main(int argc, char*argv[])
     GLuint waterTextureID = loadTexture("Textures/water.png");
     GLuint dragonflyBodyTextureID = loadTexture("Textures/dragonfly.png");
     GLuint wingTextureID = loadTexture("Textures/wings.png");
+    GLuint skyboxTextureID = loadTexture("Textures/skybox.png");
     glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
     
     // Compile and link shaders here ...
@@ -441,6 +504,7 @@ int main(int argc, char*argv[])
     int mushroomPlaneVAO = createTexturedVertexArrayObject(mushroomPlane, sizeof(mushroomPlane));
     int flowerPlaneVAO = createTexturedVertexArrayObject(flowerPlane, sizeof(flowerPlane));
     int dragonflyPlaneVAO = createTexturedVertexArrayObject(dragonflyPlane, sizeof(dragonflyPlane));
+    int skyboxVAO = createTexturedVertexArrayObject(skyboxCube, sizeof(skyboxCube));
 
     // Mushroom positions
     glm::vec3 mushroomPositions[] = {
@@ -483,8 +547,6 @@ int main(int argc, char*argv[])
     
         GLuint viewMatrixLocation = glGetUniformLocation(colorShaderProgram, "viewMatrix");
         glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
-        //Draw Rectangle
-        //glBindVertexArray(squareAO); // commented out
 
         // determining the timestep (frame duration) 
         
@@ -531,8 +593,7 @@ int main(int argc, char*argv[])
 
         glActiveTexture(GL_TEXTURE0);
         GLuint textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
-        glBindTexture(GL_TEXTURE_2D, mushroom1TextureID);
-        glUniform1i(textureLocation, 0);                // Set our Texture sampler to user Texture Unit 0
+
 
         // Draw mushroom planes
         //glUniform1f(texturedAlphaLocation, 1.0f); // Now use the correct alpha location
@@ -541,7 +602,8 @@ int main(int argc, char*argv[])
         for (int i = 0; i < 6; ++i) {
             glBindTexture(GL_TEXTURE_2D, mushroomTextureIDs[i]);
             glUniform1i(textureLocation, 0);        
-            glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]);
+
+            glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * glm::scale(glm::mat4(1.0f), vec3(2,2,2));
 
             glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
             glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -558,7 +620,7 @@ int main(int argc, char*argv[])
             glm::translate(glm::mat4(1.0f), flowerPosition) *     // Move to flower world position
             glm::translate(glm::mat4(1.0f), stemOffset) *          // Move pivot to stem
             glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *  // Rotate around stem
-            glm::translate(glm::mat4(1.0f), -stemOffset);          // Move pivot back
+            glm::translate(glm::mat4(1.0f), -stemOffset)* glm::scale(mat4(1.0f), vec3(2,2,2));          // Move pivot back
 
         // Draw flower
         glActiveTexture(GL_TEXTURE0);
@@ -609,6 +671,35 @@ int main(int argc, char*argv[])
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingBackWorldMatrix[0][0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
+        glBindTexture(GL_TEXTURE_2D, skyboxTextureID);
+        glUniform1i(textureLocation, 0);                // Set our Texture sampler to user Texture Unit 0
+
+        glDepthFunc(GL_LEQUAL);
+
+        mat4 skyboxMatrix = glm::mat4(glm::mat3(viewMatrix));
+        // Draw skybox - Draw this FIRST so it appears behind everything else
+        // Position skybox to surround the mushroom area
+        glm::vec3 skyboxCenter = glm::vec3(-4.5f, 3.0f, 3.0f); // Center between mushrooms
+        glm::vec3 skyboxSize = glm::vec3(10.0f, 7.5f, 10.0f);     // Size to contain mushroom area
+
+       // skyboxMatrix = 
+       //     glm::translate(glm::mat4(1.0f), skyboxCenter) *
+       //     glm::scale(glm::mat4(1.0f), skyboxSize);
+
+          //reset projection matrix for skybox:
+          texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
+          glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+  
+          // reset view matrix for skybox
+          texturedViewMatrixLocation = glGetUniformLocation(texturedShaderProgram, "viewMatrix");
+          glUniformMatrix4fv(texturedViewMatrixLocation, 1, GL_FALSE, &skyboxMatrix[0][0]);
+       
+        glBindVertexArray(skyboxVAO);
+        mat4 skyboxWorldMatrix = scale(mat4(1.0f), skyboxSize);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &skyboxWorldMatrix[0][0]);
+        glDrawArrays(GL_TRIANGLES, 0, 36); // 36 vertices for 6 faces * 2 triangles * 3 vertices
+        
+        glDepthFunc(GL_LESS);
         glfwSwapBuffers(window);
         glfwPollEvents();
         
