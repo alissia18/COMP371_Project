@@ -541,9 +541,9 @@ int main(int argc, char*argv[])
     // Entering Main Loop
     while(!glfwWindowShouldClose(window))
     {
-        glm::vec3 fogColor = glm::vec3(0.62f, 0.66f, 0.74f); // cool bluish-gray
-        float fogStart = 2.5f;  // start fading
-        float fogEnd = 20.0f;   // full fog beyond this
+        glm::vec3 fogColor = glm::vec3(0.165f, 0.337f, 0.506f); // cool bluish-gray
+        float fogStart = 1.5f;  // start fading
+        float fogEnd = 10.0f;   // full fog beyond this
 
         // Each frame, reset color of each pixel to glClearColor
         // Add the GL_DEPTH_BUFFER_BIT to glClear
