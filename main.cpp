@@ -402,20 +402,18 @@ void mouse_callback (GLFWwindow* window, double xpos, double ypos) {
    lastX = xpos;
    lastY = ypos;
 
-   float sensitivity = 0.4f; // can be adjusted
+   float sensitivity = 0.002f; // can be adjusted
    xoffset *= sensitivity;
    yoffset *= sensitivity;
 
    yaw += xoffset;
    pitch += yoffset;
 
-   // make sure the pitch doesnt go out of bounds, screen does not get flipped
-  //if(pitch > 179.0f){
-  //  pitch = 179.0f;
-   //}
-   //if(pitch < -179.0f){
-   // pitch = -179.0f;
-   //}
+   // Clamp pitch so camera doesn't flip vertically
+   if (pitch > 89.0f)
+       pitch = 89.0f;
+   if (pitch < -89.0f)
+       pitch = -89.0f;
 
    vec3 front;
    front.x = cos(radians(yaw)) * cos(radians(pitch));
@@ -447,7 +445,7 @@ int main(int argc, char*argv[])
     glfwMakeContextCurrent(window);
 
     // tell glfw to retrieve the mouse
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     // set mouse pos to center
     glfwSetCursorPos(window, 400.0, 300.0); // Center of your 800x600 window
 
