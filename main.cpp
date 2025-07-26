@@ -66,9 +66,13 @@ const char* getVertexShaderSource()
                 "uniform mat4 projectionMatrix = mat4(1.0);"
                 ""
                 "out vec3 vertexColor;"
+                "out vec3 FragPos;" // 💨 new: world-space position for fog
+                ""
                 "void main()"
                 "{"
                 "   vertexColor = aColor;"
+                "   vec4 worldPos = worldMatrix * vec4(aPos, 1.0);" // 💨 store world position
+                "   FragPos = worldPos.xyz;" // 💨 pass to fragment shader
                 "   mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;"
                 "   gl_Position = modelViewProjection * vec4( aPos.x, aPos.y, aPos.z, 1.0);"
                 "}";
@@ -80,13 +84,21 @@ const char* getFragmentShaderSource()
     return
                 "#version 330 core\n"
                 "in vec3 vertexColor;"
+                "in vec3 FragPos;" // 💨 from vertex shader: world position of the fragment
                 "out vec4 FragColor;"
                 ""
                 "uniform float alpha;"
+                "uniform vec3 cameraPos;"       // 💨 to calculate distance to camera
+                "uniform vec3 fogColor;"        // 💨 color of the fog (e.g., swampy green)
+                "uniform float fogStart;"       // 💨 where fog starts (distance)
+                "uniform float fogEnd;"         // 💨 where fog is fully opaque"
                 ""
                 "void main()"
                 "{"
-                "   FragColor = vec4(vertexColor, alpha);"
+                "   float distance = length(cameraPos - FragPos);"      // distance to camera"
+                "   float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);" // 1 = no fog, 0 = full fog
+                "   vec3 finalColor = mix(fogColor, vertexColor, fogFactor);" // blend fog with original color
+                "   FragColor = vec4(finalColor, alpha);"
                 "}";
 }
 
@@ -529,12 +541,27 @@ int main(int argc, char*argv[])
     // Entering Main Loop
     while(!glfwWindowShouldClose(window))
     {
+        glm::vec3 fogColor = glm::vec3(0.62f, 0.66f, 0.74f); // cool bluish-gray
+        float fogStart = 2.5f;  // start fading
+        float fogEnd = 20.0f;   // full fog beyond this
+
         // Each frame, reset color of each pixel to glClearColor
         // Add the GL_DEPTH_BUFFER_BIT to glClear
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         // Draw color geometry
         glUseProgram(colorShaderProgram);
+
+        // Send fog uniforms to color shader
+        GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
+        GLuint fogStartLoc = glGetUniformLocation(colorShaderProgram, "fogStart");
+        GLuint fogEndLoc = glGetUniformLocation(colorShaderProgram, "fogEnd");
+        GLuint camPosLoc = glGetUniformLocation(colorShaderProgram, "cameraPos");
+
+        glUniform3fv(fogColorLoc, 1, &fogColor[0]);
+        glUniform1f(fogStartLoc, fogStart);
+        glUniform1f(fogEndLoc, fogEnd);
+        glUniform3fv(camPosLoc, 1, &cameraPos[0]);
 
         //Set projection matrix for color shader:
         GLuint projectionMatrixLocation = glGetUniformLocation(colorShaderProgram, "projectionMatrix");
@@ -574,6 +601,17 @@ int main(int argc, char*argv[])
 
         // Draw textured geometry
         glUseProgram(texturedShaderProgram);
+
+        // Send fog uniforms to textured shader
+        fogColorLoc = glGetUniformLocation(texturedShaderProgram, "fogColor");
+        fogStartLoc = glGetUniformLocation(texturedShaderProgram, "fogStart");
+        fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
+        camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
+
+        glUniform3fv(fogColorLoc, 1, &fogColor[0]);
+        glUniform1f(fogStartLoc, fogStart);
+        glUniform1f(fogEndLoc, fogEnd);
+        glUniform3fv(camPosLoc, 1, &cameraPos[0]);
 
         // Get alpha location from textured shader program
         //GLuint texturedAlphaLocation = glGetUniformLocation(texturedShaderProgram, "alpha");
