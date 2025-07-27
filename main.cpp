@@ -518,12 +518,12 @@ int main(int argc, char*argv[])
 
     // Mushroom positions
     glm::vec3 mushroomPositions[] = {
-        glm::vec3(-6.0f, 0.0f, 1.0f),  // left front
-        glm::vec3( -7.0f, 0.0f, 3.0f),  // left middle
-        glm::vec3( -8.0f, 0.0f, 5.0f),  // left back
-        glm::vec3(-3.0f, 0.0f, 1.0f), // right front
-        glm::vec3(-2.0f, 0.0f, 3.0f), // right middle
-        glm::vec3(-1.0f, 0.0f, 5.0f), // right back
+        glm::vec3(-8.0f, 0.0f, 1.0f),  // left front
+        glm::vec3( -9.0f, 0.0f, 3.0f),  // left middle
+        glm::vec3( -10.0f, 0.0f, 5.0f),  // left back
+        glm::vec3(-3.0f, 0.0f, 1.3f), // right front
+        glm::vec3(-2.0f, 0.0f, 3.3f), // right middle
+        glm::vec3(-1.0f, 0.0f, 5.3f), // right back
     };
 
     vec3 flowerPosition = vec3(-2.0f, 0.0f, 8.0f);
@@ -539,226 +539,219 @@ int main(int argc, char*argv[])
     glm::mat4 projectionMatrix = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
 
     // Entering Main Loop
-    while(!glfwWindowShouldClose(window))
-    {
-        glm::vec3 fogColor = glm::vec3(0.165f, 0.337f, 0.506f); // cool bluish-gray
-        float fogStart = 1.5f;  // start fading
-        float fogEnd = 10.0f;   // full fog beyond this
+while(!glfwWindowShouldClose(window))
+{
+    glm::vec3 fogColor = glm::vec3(0.165f, 0.337f, 0.506f); // cool bluish-gray
+    float fogStart = 2.5f;  // start fading
+    float fogEnd = 15.0f;   // full fog beyond this
 
-        // Each frame, reset color of each pixel to glClearColor
-        // Add the GL_DEPTH_BUFFER_BIT to glClear
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
-        // Draw color geometry
-        glUseProgram(colorShaderProgram);
-
-        // Send fog uniforms to color shader
-        GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
-        GLuint fogStartLoc = glGetUniformLocation(colorShaderProgram, "fogStart");
-        GLuint fogEndLoc = glGetUniformLocation(colorShaderProgram, "fogEnd");
-        GLuint camPosLoc = glGetUniformLocation(colorShaderProgram, "cameraPos");
-
-        glUniform3fv(fogColorLoc, 1, &fogColor[0]);
-        glUniform1f(fogStartLoc, fogStart);
-        glUniform1f(fogEndLoc, fogEnd);
-        glUniform3fv(camPosLoc, 1, &cameraPos[0]);
-
-        //Set projection matrix for color shader:
-        GLuint projectionMatrixLocation = glGetUniformLocation(colorShaderProgram, "projectionMatrix");
-        glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
-
-        glm::mat4 viewMatrix;
-        viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    // Each frame, reset color of each pixel to glClearColor
+    // Add the GL_DEPTH_BUFFER_BIT to glClear
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
-        GLuint viewMatrixLocation = glGetUniformLocation(colorShaderProgram, "viewMatrix");
-        glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
+    // determining the timestep (frame duration) 
+    float currentFrame = glfwGetTime();
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
 
-        // determining the timestep (frame duration) 
-        
-        float currentFrame = glfwGetTime();
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
+    // increase rotation angle based on rotation speed and timestep
+    angle = 2.0f * sin(glfwGetTime()); // note: angle is in deg, but glm expects rad (conversion below)
+    
+    // Calculate view matrix once for both shaders
+    glm::mat4 viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    
+    // ========== RENDER SKYBOX FIRST ==========
+    glUseProgram(texturedShaderProgram);
+    
+    // Disable depth writing for skybox
+    glDepthMask(GL_FALSE);
+    glDepthFunc(GL_LEQUAL);
+    
+    // Set up skybox matrices
+    glm::mat4 skyboxViewMatrix = glm::mat4(glm::mat3(viewMatrix)); // Remove translation
+    GLuint texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
+    glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+    
+    GLuint texturedViewMatrixLocation = glGetUniformLocation(texturedShaderProgram, "viewMatrix");
+    glUniformMatrix4fv(texturedViewMatrixLocation, 1, GL_FALSE, &skyboxViewMatrix[0][0]);
+    
+    GLuint worldMatrixLocation = glGetUniformLocation(texturedShaderProgram, "worldMatrix");
+    glm::vec3 skyboxSize = glm::vec3(5.0f, 5.0f, 5.0f); // Large skybox
+    glm::mat4 skyboxWorldMatrix = glm::scale(glm::mat4(1.0f), skyboxSize);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &skyboxWorldMatrix[0][0]);
+    
+    // Bind skybox texture and draw
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, skyboxTextureID);
+    GLuint textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
+    glUniform1i(textureLocation, 0);
+    
+    glBindVertexArray(skyboxVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    
+    // Re-enable depth writing and reset depth function for regular objects
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
+    
+    // ========== RENDER REGULAR GEOMETRY ==========
+    
+    // Draw color geometry (ground)
+    glUseProgram(colorShaderProgram);
 
-        // increase rotation angle based on rotation speed and timestep
-        angle = 2.0f * sin(glfwGetTime()); // note: angle is in deg, but glm expects rad (conversion below)
-        glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f)); // move square half a unit up
-        
-        // create rotation matrix around y axis and bind to vertex shader
-        GLuint worldMatrixLocation = glGetUniformLocation(colorShaderProgram, "worldMatrix");
-        //glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &translationMatrix[0][0]); // commented out
+    // Send fog uniforms to color shader
+    GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
+    GLuint fogStartLoc = glGetUniformLocation(colorShaderProgram, "fogStart");
+    GLuint fogEndLoc = glGetUniformLocation(colorShaderProgram, "fogEnd");
+    GLuint camPosLoc = glGetUniformLocation(colorShaderProgram, "cameraPos");
 
-        // draw the model
-        //glDrawArrays(GL_TRIANGLES, 0, 6); // 6 vertices, starting at index 0 // commented out
+    glUniform3fv(fogColorLoc, 1, &fogColor[0]);
+    glUniform1f(fogStartLoc, fogStart);
+    glUniform1f(fogEndLoc, fogEnd);
+    glUniform3fv(camPosLoc, 1, &cameraPos[0]);
 
-        // Draw ground
-        glUniform1f(alphaLocation, 1.0f);
-        glm::mat4 groundWorldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.01f, 0.0f)) *
-                                      glm::scale(glm::mat4(1.0f), glm::vec3(1000.0f, 0.02f, 1000.0f));
+    //Set projection matrix for color shader:
+    GLuint projectionMatrixLocation = glGetUniformLocation(colorShaderProgram, "projectionMatrix");
+    glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 
-        glBindVertexArray(groundVAO);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+    GLuint viewMatrixLocation = glGetUniformLocation(colorShaderProgram, "viewMatrix");
+    glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
 
-        // Draw textured geometry
-        glUseProgram(texturedShaderProgram);
+    // create rotation matrix around y axis and bind to vertex shader
+    worldMatrixLocation = glGetUniformLocation(colorShaderProgram, "worldMatrix");
+    GLuint alphaLocation = glGetUniformLocation(colorShaderProgram, "alpha");
 
-        // Send fog uniforms to textured shader
-        fogColorLoc = glGetUniformLocation(texturedShaderProgram, "fogColor");
-        fogStartLoc = glGetUniformLocation(texturedShaderProgram, "fogStart");
-        fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
-        camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
+    // Draw ground
+    glUniform1f(alphaLocation, 1.0f);
+    glm::mat4 groundWorldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.01f, 0.0f)) *
+                                  glm::scale(glm::mat4(1.0f), glm::vec3(1000.0f, 0.02f, 1000.0f));
 
-        glUniform3fv(fogColorLoc, 1, &fogColor[0]);
-        glUniform1f(fogStartLoc, fogStart);
-        glUniform1f(fogEndLoc, fogEnd);
-        glUniform3fv(camPosLoc, 1, &cameraPos[0]);
+    glBindVertexArray(groundVAO);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
 
-        // Get alpha location from textured shader program
-        //GLuint texturedAlphaLocation = glGetUniformLocation(texturedShaderProgram, "alpha");
+    // Draw textured geometry
+    glUseProgram(texturedShaderProgram);
 
-        //Set projection matrix for textured shader:
-        GLuint texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
-        glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+    // Send fog uniforms to textured shader
+    fogColorLoc = glGetUniformLocation(texturedShaderProgram, "fogColor");
+    fogStartLoc = glGetUniformLocation(texturedShaderProgram, "fogStart");
+    fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
+    camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
 
-        // Set view matrix for textured shader too
-        GLuint texturedViewMatrixLocation = glGetUniformLocation(texturedShaderProgram, "viewMatrix");
-        glUniformMatrix4fv(texturedViewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
+    glUniform3fv(fogColorLoc, 1, &fogColor[0]);
+    glUniform1f(fogStartLoc, fogStart);
+    glUniform1f(fogEndLoc, fogEnd);
+    glUniform3fv(camPosLoc, 1, &cameraPos[0]);
 
-        // Get world matrix location for textured shader
-        worldMatrixLocation = glGetUniformLocation(texturedShaderProgram, "worldMatrix");
+    //Set projection matrix for textured shader:
+    texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
+    glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 
-        glActiveTexture(GL_TEXTURE0);
-        GLuint textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
+    // Set view matrix for textured shader too (regular view matrix, not skybox view matrix)
+    texturedViewMatrixLocation = glGetUniformLocation(texturedShaderProgram, "viewMatrix");
+    glUniformMatrix4fv(texturedViewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
 
+    // Get world matrix location for textured shader
+    worldMatrixLocation = glGetUniformLocation(texturedShaderProgram, "worldMatrix");
 
-        // Draw mushroom planes
-        //glUniform1f(texturedAlphaLocation, 1.0f); // Now use the correct alpha location
+    glActiveTexture(GL_TEXTURE0);
+    textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
 
-        glBindVertexArray(mushroomPlaneVAO);
-        for (int i = 0; i < 6; ++i) {
-            glBindTexture(GL_TEXTURE_2D, mushroomTextureIDs[i]);
-            glUniform1i(textureLocation, 0);        
+    // Draw mushroom planes
+    glBindVertexArray(mushroomPlaneVAO);
+    for (int i = 0; i < 6; ++i) {
+        glBindTexture(GL_TEXTURE_2D, mushroomTextureIDs[i]);
+        glUniform1i(textureLocation, 0);        
 
-            glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * glm::scale(glm::mat4(1.0f), vec3(2,2,2));
+        glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * glm::scale(glm::mat4(1.0f), vec3(2,2,2));
 
-            glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-        }
-
-        // Define the stem offset relative to flower center
-        glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
-
-        // Convert rotation angle from degrees to radians
-        float angleRadians = glm::radians(angle);
-
-        // Build plant matrix with pivot at stem
-        glm::mat4 plantMatrix =
-            glm::translate(glm::mat4(1.0f), flowerPosition) *     // Move to flower world position
-            glm::translate(glm::mat4(1.0f), stemOffset) *          // Move pivot to stem
-            glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *  // Rotate around stem
-            glm::translate(glm::mat4(1.0f), -stemOffset)* glm::scale(mat4(1.0f), vec3(2,2,2));          // Move pivot back
-
-        // Draw flower
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, flowerTextureID);
-        glUniform1i(textureLocation, 0);
-
-        glBindVertexArray(flowerPlaneVAO);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        // Draw dragonfly body relative to flower
-        glm::mat4 dragonflyLocalMatrix = glm::translate(glm::mat4(1.0f), dragonflyPosition - flowerPosition);
-        glm::mat4 dragonflyWorldMatrix = plantMatrix * dragonflyLocalMatrix;
-
-        glBindTexture(GL_TEXTURE_2D, dragonflyBodyTextureID);
-        glBindVertexArray(dragonflyPlaneVAO);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWorldMatrix[0][0]);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        // Draw dragonfly wings relative to flower
-
-        // --- Animate front wing flapping ---
-
-        float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // only flaps outward
-        glm::vec3 wingOffsetFront = wingPositionFront - flowerPosition;
-
-        glm::mat4 wingFrontLocalMatrix =
-        glm::translate(glm::mat4(1.0f), wingOffsetFront) *                      // move to local space
-        glm::rotate(glm::mat4(1.0f), glm::radians(flapAngle), glm::vec3(1, 0, 0));  // flap around X axis
-
-        glm::mat4 wingFrontWorldMatrix = plantMatrix * wingFrontLocalMatrix;
-
-        glBindTexture(GL_TEXTURE_2D, wingTextureID);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingFrontWorldMatrix[0][0]);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        // --- Animate back wing flapping ---
-
-        float flapAngleBack = -12.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // flap back wing downward only
-        glm::vec3 wingOffsetBack = wingPositionBack - flowerPosition;
-
-        glm::mat4 wingBackLocalMatrix =
-        glm::translate(glm::mat4(1.0f), wingOffsetBack) *
-        glm::rotate(glm::mat4(1.0f), glm::radians(flapAngleBack), glm::vec3(1, 0, 0));  // flap around X axis
-
-        glm::mat4 wingBackWorldMatrix = plantMatrix * wingBackLocalMatrix;
-
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingBackWorldMatrix[0][0]);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        glBindTexture(GL_TEXTURE_2D, skyboxTextureID);
-        glUniform1i(textureLocation, 0);                // Set our Texture sampler to user Texture Unit 0
-
-        glDepthFunc(GL_LEQUAL);
-
-        mat4 skyboxMatrix = glm::mat4(glm::mat3(viewMatrix));
-        // Draw skybox - Draw this FIRST so it appears behind everything else
-        // Position skybox to surround the mushroom area
-        glm::vec3 skyboxCenter = glm::vec3(-4.5f, 3.0f, 3.0f); // Center between mushrooms
-        glm::vec3 skyboxSize = glm::vec3(10.0f, 7.5f, 10.0f);     // Size to contain mushroom area
-
-       // skyboxMatrix = 
-       //     glm::translate(glm::mat4(1.0f), skyboxCenter) *
-       //     glm::scale(glm::mat4(1.0f), skyboxSize);
-
-          //reset projection matrix for skybox:
-          texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
-          glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
-  
-          // reset view matrix for skybox
-          texturedViewMatrixLocation = glGetUniformLocation(texturedShaderProgram, "viewMatrix");
-          glUniformMatrix4fv(texturedViewMatrixLocation, 1, GL_FALSE, &skyboxMatrix[0][0]);
-       
-        glBindVertexArray(skyboxVAO);
-        mat4 skyboxWorldMatrix = scale(mat4(1.0f), skyboxSize);
-        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &skyboxWorldMatrix[0][0]);
-        glDrawArrays(GL_TRIANGLES, 0, 36); // 36 vertices for 6 faces * 2 triangles * 3 vertices
-        
-        glDepthFunc(GL_LESS);
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-        
-        // Handle inputs
-
-        // escape
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-            glfwSetWindowShouldClose(window, true);
-   
-        float cameraSpeed = 2.5 * deltaTime; // adjust accordingly
-
-        // camera movement
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        cameraPos += cameraSpeed * cameraFront;
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        cameraPos -= cameraSpeed * cameraFront;
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-
     }
 
+    // Define the stem offset relative to flower center
+    glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
+
+    // Convert rotation angle from degrees to radians
+    float angleRadians = glm::radians(angle);
+
+    // Build plant matrix with pivot at stem
+    glm::mat4 plantMatrix =
+        glm::translate(glm::mat4(1.0f), flowerPosition) *     // Move to flower world position
+        glm::translate(glm::mat4(1.0f), stemOffset) *          // Move pivot to stem
+        glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *  // Rotate around stem
+        glm::translate(glm::mat4(1.0f), -stemOffset)* glm::scale(mat4(1.0f), vec3(2,2,2));          // Move pivot back
+
+    // Draw flower
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, flowerTextureID);
+    glUniform1i(textureLocation, 0);
+
+    glBindVertexArray(flowerPlaneVAO);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // Draw dragonfly body relative to flower
+    glm::mat4 dragonflyLocalMatrix = glm::translate(glm::mat4(1.0f), dragonflyPosition - flowerPosition);
+    glm::mat4 dragonflyWorldMatrix = plantMatrix * dragonflyLocalMatrix;
+
+    glBindTexture(GL_TEXTURE_2D, dragonflyBodyTextureID);
+    glBindVertexArray(dragonflyPlaneVAO);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWorldMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // Draw dragonfly wings relative to flower
+
+    // --- Animate front wing flapping ---
+
+    float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // only flaps outward
+    glm::vec3 wingOffsetFront = wingPositionFront - flowerPosition;
+
+    glm::mat4 wingFrontLocalMatrix =
+    glm::translate(glm::mat4(1.0f), wingOffsetFront) *                      // move to local space
+    glm::rotate(glm::mat4(1.0f), glm::radians(flapAngle), glm::vec3(1, 0, 0));  // flap around X axis
+
+    glm::mat4 wingFrontWorldMatrix = plantMatrix * wingFrontLocalMatrix;
+
+    glBindTexture(GL_TEXTURE_2D, wingTextureID);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingFrontWorldMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // --- Animate back wing flapping ---
+
+    float flapAngleBack = -12.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // flap back wing downward only
+    glm::vec3 wingOffsetBack = wingPositionBack - flowerPosition;
+
+    glm::mat4 wingBackLocalMatrix =
+    glm::translate(glm::mat4(1.0f), wingOffsetBack) *
+    glm::rotate(glm::mat4(1.0f), glm::radians(flapAngleBack), glm::vec3(1, 0, 0));  // flap around X axis
+
+    glm::mat4 wingBackWorldMatrix = plantMatrix * wingBackLocalMatrix;
+
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingBackWorldMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+    
+    // Handle inputs
+
+    // escape
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+
+    float cameraSpeed = 2.5 * deltaTime; // adjust accordingly
+
+    // camera movement
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    cameraPos += cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    cameraPos -= cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+}
     
     // Shutdown GLFW
     glfwTerminate();
