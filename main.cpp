@@ -16,6 +16,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
+#include "OBJloaderV2.h"  //For loading .obj files using a polygon list format
+
+
 void mouse_callback (GLFWwindow* window, double xpos, double ypos);
 
 GLuint loadTexture(const char *filename);
@@ -434,6 +437,59 @@ void mouse_callback (GLFWwindow* window, double xpos, double ypos) {
    cameraFront = normalize(front);
 }
 
+//Sets up a model using an Element Buffer Object to refer to vertex data
+GLuint setupModelEBO(string path, int& vertexCount)
+{
+	vector<int> vertexIndices; //The contiguous sets of three indices of vertices, normals and UVs, used to make a triangle
+	vector<glm::vec3> vertices;
+	vector<glm::vec3> normals;
+	vector<glm::vec2> UVs;
+
+	//read the vertices from the cube.obj file
+	//We won't be needing the normals or UVs for this program
+	loadOBJ2(path.c_str(), vertexIndices, vertices, normals, UVs);
+
+	GLuint VAO;
+	glGenVertexArrays(1, &VAO);
+	glBindVertexArray(VAO); //Becomes active VAO
+	// Bind the Vertex Array Object first, then bind and set vertex buffer(s) and attribute pointer(s).
+
+	//Vertex VBO setup
+	GLuint vertices_VBO;
+	glGenBuffers(1, &vertices_VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, vertices_VBO);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices.front(), GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+
+	//Normals VBO setup
+	GLuint normals_VBO;
+	glGenBuffers(1, &normals_VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, normals_VBO);
+	glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals.front(), GL_STATIC_DRAW);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(1);
+
+	//UVs VBO setup
+	GLuint uvs_VBO;
+	glGenBuffers(1, &uvs_VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, uvs_VBO);
+	glBufferData(GL_ARRAY_BUFFER, UVs.size() * sizeof(glm::vec2), &UVs.front(), GL_STATIC_DRAW);
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(2);
+
+	//EBO setup
+	GLuint EBO;
+	glGenBuffers(1, &EBO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, vertexIndices.size() * sizeof(int), &vertexIndices.front(), GL_STATIC_DRAW);
+
+	glBindVertexArray(0); // Unbind VAO (it's always a good thing to unbind any buffer/array to prevent strange bugs), remember: do NOT unbind the EBO, keep it bound to this VAO
+	vertexCount = vertexIndices.size();
+	return VAO;
+}
+
+
 
 int main(int argc, char*argv[])
 {
@@ -494,12 +550,20 @@ int main(int argc, char*argv[])
     GLuint mushroom5TextureID = loadTexture("Textures/mushroom5.png");
     GLuint mushroom6TextureID = loadTexture("Textures/mushroom6.png");
     GLuint mushroomTextureIDs[] = {mushroom1TextureID, mushroom2TextureID, mushroom3TextureID, mushroom4TextureID, mushroom5TextureID, mushroom6TextureID};
+    GLuint mushroomTextureID = loadTexture("Textures/mushroom_texture.png");
     GLuint flowerTextureID = loadTexture("Textures/flower.png");
     GLuint waterTextureID = loadTexture("Textures/water.png");
     GLuint dragonflyBodyTextureID = loadTexture("Textures/dragonfly.png");
     GLuint wingTextureID = loadTexture("Textures/wings.png");
     GLuint skyboxTextureID = loadTexture("Textures/skybox.png");
     glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
+
+    // mushroom 3d model
+    string mushroomPath = "Models/mushroom.obj";
+    int mushroomVertices;
+
+    GLuint mushroomVAO = setupModelEBO(mushroomPath, mushroomVertices);
+
     
     // Compile and link shaders here ...
     int colorShaderProgram = compileAndLinkShaders(getVertexShaderSource(), getFragmentShaderSource());
@@ -669,6 +733,13 @@ while(!glfwWindowShouldClose(window))
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 
+    // draw a 3d mushroom
+
+    glBindVertexArray(mushroomVAO);
+    glBindTexture(GL_TEXTURE_2D, mushroomTextureID);
+    glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
+
+    
     // Define the stem offset relative to flower center
     glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
 
