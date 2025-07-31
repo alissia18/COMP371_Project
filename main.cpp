@@ -123,14 +123,14 @@ const char* getFragmentShaderSource()
                 "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);"
                 "    vec3 specular = lightSpecular * spec;"
                 "    vec3 lighting = ambient + (diffuse + specular) * intensity;"    // Combine lighting components with spotlight intensity
-                "   vec3 baseColor = vertexColor;"
-                "   vec3 litColor = baseColor + lighting * 0.5;" // only adds brightness
-                ""
-                "   "
-                "   float distance = length(cameraPos - FragPos);"      // distance to camera"
-                "   float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);" // 1 = no fog, 0 = full fog
-                "   vec3 finalColor = clamp(mix(fogColor, litColor, fogFactor), 0.0, 1.0);" // blend fog with original color
-                "   FragColor = vec4(finalColor, alpha);"
+                "    vec3 baseColor = vertexColor;"
+                "    vec3 litColor = baseColor + intensity * lightDiffuse * vec3(1.0, 1.0, 0.6);"  // warm yellow flashlight
+                "    litColor = clamp(litColor, 0.0, 1.0);"
+                "    "
+                "    float distance = length(cameraPos - FragPos);"      // distance to camera"
+                "    float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);" // 1 = no fog, 0 = full fog
+                "    vec3 finalColor = clamp(mix(fogColor, litColor, fogFactor), 0.0, 1.0);" // blend fog with original color
+                "    FragColor = vec4(finalColor, alpha);"
                 "}";
 }
 
