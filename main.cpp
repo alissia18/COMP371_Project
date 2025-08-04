@@ -141,20 +141,26 @@ const char* getTexturedVertexShaderSource()
     "layout (location = 0) in vec3 aPos;"
     "layout (location = 1) in vec3 aColor;"
     "layout (location = 2) in vec2 aUV;"
+    "layout (location = 3) in vec3 aNormal;" // Add normal input
     ""
     "uniform mat4 worldMatrix;"
-    "uniform mat4 viewMatrix = mat4(1.0);"  // default value for view matrix (identity)
+    "uniform mat4 viewMatrix = mat4(1.0);"
     "uniform mat4 projectionMatrix = mat4(1.0);"
     ""
     "out vec3 vertexColor;"
     "out vec2 vertexUV;"
+    "out vec3 FragPos;"   // World-space position for lighting
+    "out vec3 Normal;"    // World-space normal for lighting
     ""
     "void main()"
     "{"
     "   vertexColor = aColor;"
+    "   vertexUV = aUV;"
+    "   vec4 worldPos = worldMatrix * vec4(aPos, 1.0);"
+    "   FragPos = worldPos.xyz;"
+    "   Normal = mat3(transpose(inverse(worldMatrix))) * aNormal;"
     "   mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;"
     "   gl_Position = modelViewProjection * vec4(aPos.x, aPos.y, aPos.z, 1.0);"
-    "   vertexUV = aUV;"
     "}";
 }
 
@@ -164,35 +170,77 @@ const char* getTexturedFragmentShaderSource()
     "#version 330 core\n"
     "in vec3 vertexColor;"
     "in vec2 vertexUV;"
+    "in vec3 FragPos;"
+    "in vec3 Normal;"
+    ""
     "uniform sampler2D textureSampler;"
-    "uniform float alpha = 1.0;" // Add alpha uniform with default value
+    "uniform float alpha = 1.0;"
+    ""
+    // Fog uniforms
+    "uniform vec3 cameraPos;"
+    "uniform vec3 fogColor;"
+    "uniform float fogStart;"
+    "uniform float fogEnd;"
+    ""
+    // Spotlight uniforms (same as color shader)
+    "uniform vec3 lightPos;"
+    "uniform vec3 lightDir;"
+    "uniform float cutOff;"
+    "uniform float outerCutOff;"
+    "uniform vec3 lightAmbient;"
+    "uniform vec3 lightDiffuse;"
+    "uniform vec3 lightSpecular;"
+    "uniform float shininess;"
+    ""
+    // KEY PARAMETERS FOR CUSTOMIZATION:
+    "uniform float lightOpacity = 0.8;"        // OPACITY: Lower = more transparent light
+    "uniform vec3 flashlightColor = vec3(1.0, 1.0, 0.6);" // COLOR: Yellow flashlight
+    "uniform float falloffSmoothness = 2.0;"   // FALLOFF: Higher = smoother edges
     ""
     "out vec4 FragColor;"
+    ""
     "void main()"
     "{"
-    "   vec4 textureColor = texture( textureSampler, vertexUV );"
+    "   vec4 textureColor = texture(textureSampler, vertexUV);"
     "   if(textureColor.a < 0.5) discard;"
-    "   FragColor = vec4(textureColor.rgb, textureColor.a * alpha);" // Use texture's alpha multiplied by uniform alpha
+    ""
+    // Lighting calculations (copied from color shader)
+    "   vec3 norm = normalize(Normal);"
+    "   vec3 lightDirection = normalize(lightPos - FragPos);"
+    "   float theta = dot(lightDirection, normalize(-lightDir));"
+    ""
+    // Enhanced spotlight falloff with smoothness parameter
+    "   float epsilon = cutOff - outerCutOff;"
+    "   float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
+    "   intensity = pow(intensity, falloffSmoothness);" // Apply smoothness
+    ""
+    // Ambient lighting
+    "   vec3 ambient = lightAmbient * textureColor.rgb;"
+    ""
+    // Diffuse lighting
+    "   float diff = max(dot(norm, lightDirection), 0.0);"
+    "   vec3 diffuse = lightDiffuse * diff * textureColor.rgb;"
+    ""
+    // Specular lighting
+    "   vec3 viewDir = normalize(cameraPos - FragPos);"
+    "   vec3 reflectDir = reflect(-lightDirection, norm);"
+    "   float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);"
+    "   vec3 specular = lightSpecular * spec;"
+    ""
+    // Combine lighting with flashlight color and opacity
+    "   vec3 lighting = ambient + (diffuse + specular) * intensity;"
+    "   vec3 baseColor = textureColor.rgb;"
+    "   vec3 lightContribution = intensity * lightDiffuse * flashlightColor * lightOpacity;"
+    "   vec3 litColor = baseColor + lightContribution;"
+    "   litColor = clamp(litColor, 0.0, 1.0);"
+    ""
+    // Apply fog
+    "   float distance = length(cameraPos - FragPos);"
+    "   float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);"
+    "   vec3 finalColor = clamp(mix(fogColor, litColor, fogFactor), 0.0, 1.0);"
+    "   FragColor = vec4(finalColor, alpha);"
     "}";
 }
-
-glm::vec3 squareArray[] = {
-    // First Triangle
-    glm::vec3(-0.5f, -0.5f, 0.0f),
-    glm::vec3( 1.0f,  0.0f, 0.0f),
-    glm::vec3( 0.5f,  0.5f, 0.0f),
-    glm::vec3( 0.0f,  1.0f, 0.0f),
-    glm::vec3(-0.5f,  0.5f, 0.0f),
-    glm::vec3( 0.0f,  0.0f, 1.0f),
-
-    // Second Triangle
-    glm::vec3( 0.5f, -0.5f, 0.0f),
-    glm::vec3( 1.0f,  1.0f, 0.0f),
-    glm::vec3( 0.5f,  0.5f, 0.0f),
-    glm::vec3( 0.0f,  1.0f, 0.0f),
-    glm::vec3(-0.5f, -0.5f, 0.0f),
-    glm::vec3( 1.0f,  0.0f, 0.0f),
-};
 
 glm::vec3 floorVertices[] = {
     // positions           // colors            // normals
@@ -206,102 +254,96 @@ glm::vec3 floorVertices[] = {
 };
 
 glm::vec3 skyboxCube[] = {  
-    // LEFT FACE (X = -1) - column 0, row 1 (from bottom)
-    // Original V: 0.25-0.5, flipped to 0.5-0.25
-    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.5f, 0.0f),   // bottom-left (now top)
-    glm::vec3(-1.0f,  1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.25f, 0.0f),  // top-left (now bottom)
-    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.5f, 0.0f),  // bottom-right (now top)
+    // LEFT FACE (X = -1) - Normal points right (+X)
+    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f),   // bottom-left
+    glm::vec3(-1.0f,  1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.25f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f),  // top-left
+    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.5f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f),  // bottom-right
     
-    glm::vec3(-1.0f,  1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.25f, 0.0f),  // top-left (now bottom)
-    glm::vec3(-1.0f,  1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.25f, 0.0f), // top-right (now bottom)
-    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.5f, 0.0f), // bottom-right (now top)
+    glm::vec3(-1.0f,  1.0f, -1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.0f, 0.25f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f),  // top-left
+    glm::vec3(-1.0f,  1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.25f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right
+    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.5f, 0.7f, 1.0f), glm::vec3(0.25f, 0.5f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), // bottom-right
 
-    // RIGHT FACE (X = +1) - column 2, row 1 (from bottom)
-    // Original V: 0.25-0.5, flipped to 0.5-0.25
-    glm::vec3(1.0f, -1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.5f, 0.0f),    // bottom-left (now top)
-    glm::vec3(1.0f,  1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.25f, 0.0f),   // top-left (now bottom)  
-    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.5f, 0.0f),   // bottom-right (now top)
+    // RIGHT FACE (X = +1) - Normal points left (-X)
+    glm::vec3(1.0f, -1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.5f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f),    // bottom-left
+    glm::vec3(1.0f,  1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.25f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f),   // top-left  
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.5f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f),   // bottom-right
     
-    glm::vec3(1.0f,  1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.25f, 0.0f),   // top-left (now bottom)
-    glm::vec3(1.0f,  1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.25f, 0.0f),  // top-right (now bottom)
-    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.5f, 0.0f),   // bottom-right (now top)
+    glm::vec3(1.0f,  1.0f,  1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.5f, 0.25f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f),   // top-left
+    glm::vec3(1.0f,  1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.25f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f),  // top-right
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.5f, 0.8f), glm::vec3(0.75f, 0.5f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f),   // bottom-right
 
-    // BOTTOM FACE (Y = -1) - column 1, row 2 (from bottom)
-    // Original V: 0.5-0.75, flipped to 0.75-0.5
-    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.75f, 0.0f), // bottom-left (now top)
-    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.75f, 0.0f),   // bottom-right (now top)
-    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.5f, 0.0f),  // top-left (now bottom)
+    // BOTTOM FACE (Y = -1) - Normal points up (+Y)
+    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.75f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.75f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f),   // bottom-right
+    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f),  // top-left
     
-    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.75f, 0.0f),   // bottom-right (now top)
-    glm::vec3(1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.5f, 0.0f),    // top-right (now bottom)
-    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.5f, 0.0f),  // top-left (now bottom)
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.75f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f),   // bottom-right
+    glm::vec3(1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.5f, 0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f),    // top-right
+    glm::vec3(-1.0f, -1.0f,  1.0f), glm::vec3(0.2f, 0.3f, 0.4f), glm::vec3(0.25f, 0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f),  // top-left
 
-    // TOP FACE (Y = +1) - column 1, row 0 (from bottom)
-    // Original V: 0.0-0.25, flipped to 0.25-0.0
-    glm::vec3(-1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.25f, 0.0f),  // bottom-left (now top)
-    glm::vec3(1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.25f, 0.0f),    // bottom-right (now top)
-    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.0f, 0.0f),   // top-left (now bottom)
+    // TOP FACE (Y = +1) - Normal points down (-Y)
+    glm::vec3(-1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.25f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),  // bottom-left
+    glm::vec3(1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.25f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),    // bottom-right
+    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),   // top-left
     
-    glm::vec3(1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.25f, 0.0f),    // bottom-right (now top)
-    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.0f, 0.0f),     // top-right (now bottom)
-    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.0f, 0.0f),   // top-left (now bottom)
+    glm::vec3(1.0f, 1.0f,  1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.25f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),    // bottom-right
+    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.5f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),     // top-right
+    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.6f, 0.8f, 1.0f), glm::vec3(0.25f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),   // top-left
 
-    // FRONT FACE (Z = +1) - column 1, row 1 (from bottom)
-    // Original V: 0.25-0.5, flipped to 0.5-0.25
-    glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.5f, 0.0f),   // bottom-left (now top)
-    glm::vec3(1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.5f, 0.0f),     // bottom-right (now top)
-    glm::vec3(-1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.25f, 0.0f),   // top-left (now bottom)
+    // FRONT FACE (Z = +1) - Normal points back (-Z)
+    glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.5f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f),   // bottom-left
+    glm::vec3(1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.5f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f),     // bottom-right
+    glm::vec3(-1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.25f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f),   // top-left
     
-    glm::vec3(1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.5f, 0.0f),     // bottom-right (now top)
-    glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.25f, 0.0f),     // top-right (now bottom)
-    glm::vec3(-1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.25f, 0.0f),   // top-left (now bottom)
+    glm::vec3(1.0f, -1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.5f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f),     // bottom-right
+    glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.5f, 0.25f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f),     // top-right
+    glm::vec3(-1.0f, 1.0f, 1.0f), glm::vec3(0.4f, 0.6f, 0.9f), glm::vec3(0.25f, 0.25f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f),   // top-left
 
-    // BACK FACE (Z = -1) - column 3, row 1 (from bottom)
-    // Original V: 0.25-0.5, flipped to 0.5-0.25
-    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.5f, 0.0f),   // bottom-left (now top)
-    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.5f, 0.0f),   // bottom-right (now top)
-    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.25f, 0.0f),   // top-left (now bottom)
+    // BACK FACE (Z = -1) - Normal points forward (+Z)
+    glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.5f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f),   // bottom-left
+    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.5f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f),   // bottom-right
+    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.25f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f),   // top-left
     
-    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.5f, 0.0f),   // bottom-right (now top)
-    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.25f, 0.0f),   // top-right (now bottom)
-    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.25f, 0.0f)    // top-left (now bottom)
+    glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.5f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f),   // bottom-right
+    glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.25f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f),   // top-right
+    glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.25f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)    // top-left
 };
-
 glm::vec3 mushroomPlane[] = {
-    // Triangle 1
-    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
-    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
-    glm::vec3(-1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), // top-left (U=0, V=0) - FLIPPED V
+    // Triangle 1 - Normal points toward camera (0, 0, 1)
+    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-left
+    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-right
+    glm::vec3(-1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-left
 
-    // Triangle 2
-    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
-    glm::vec3( 1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), // bottom-right (U=1, V=1) - FLIPPED V
-    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
+    // Triangle 2 - Normal points toward camera (0, 0, 1)
+    glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-left
+    glm::vec3( 1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-right
+    glm::vec3( 1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-right
 };
 
 glm::vec3 flowerPlane[] = {
-    // Triangle 1
-    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
-    glm::vec3( 0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
-    glm::vec3(-0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), // top-left (U=0, V=0) - FLIPPED V
+    // Triangle 1 - Normal points toward camera (0, 0, 1)
+    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-left
+    glm::vec3( 0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-right
+    glm::vec3(-0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-left
 
-    // Triangle 2
-    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
-    glm::vec3( 0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), // bottom-right (U=1, V=1) - FLIPPED V
-    glm::vec3( 0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
+    // Triangle 2 - Normal points toward camera (0, 0, 1)
+    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-left
+    glm::vec3( 0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-right
+    glm::vec3( 0.5f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-right
 };
 
 glm::vec3 dragonflyPlane[] = {
-    // Triangle 1
-    glm::vec3(-0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
-    glm::vec3( 0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
-    glm::vec3(-0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), // top-left (U=0, V=0) - FLIPPED V
+    // Triangle 1 - Normal points toward camera (0, 0, 1)
+    glm::vec3(-0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-left
+    glm::vec3( 0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-right
+    glm::vec3(-0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-left
 
-    // Triangle 2
-    glm::vec3(-0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), // bottom-left (U=0, V=1) - FLIPPED V
-    glm::vec3( 0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), // bottom-right (U=1, V=1) - FLIPPED V
-    glm::vec3( 0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), // top-right (U=1, V=0) - FLIPPED V
+    // Triangle 2 - Normal points toward camera (0, 0, 1)
+    glm::vec3(-0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-left
+    glm::vec3( 0.2f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-right
+    glm::vec3( 0.2f, 0.4f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // top-right
 };
+
 
 int compileAndLinkShaders(const char* vertexShaderSource, const char* fragmentShaderSource)
 {
@@ -580,7 +622,6 @@ int main(int argc, char*argv[])
     GLuint alphaLocation = glGetUniformLocation(colorShaderProgram, "alpha");
     
     // Define and upload geometry to the GPU here ...
-    int squareAO = createVertexArrayObject(squareArray, sizeof(squareArray));
     int floorVAO = createVertexArrayObject(floorVertices, sizeof(floorVertices));
     int mushroomPlaneVAO = createTexturedVertexArrayObject(mushroomPlane, sizeof(mushroomPlane));
     int flowerPlaneVAO = createTexturedVertexArrayObject(flowerPlane, sizeof(flowerPlane));
@@ -744,6 +785,22 @@ while(!glfwWindowShouldClose(window))
     fogStartLoc = glGetUniformLocation(texturedShaderProgram, "fogStart");
     fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
     camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
+
+    glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightPos"), 1, &cameraPos[0]);
+glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightDir"), 1, &cameraFront[0]);
+
+glUniform1f(glGetUniformLocation(texturedShaderProgram, "cutOff"), glm::cos(glm::radians(12.5f)));
+glUniform1f(glGetUniformLocation(texturedShaderProgram, "outerCutOff"), glm::cos(glm::radians(17.5f)));
+
+glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
+glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
+glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
+glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 32.0f);
+
+// 🔧 KEY CUSTOMIZATION PARAMETERS:
+glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.5f);  // LOWER = more transparent
+glUniform3f(glGetUniformLocation(texturedShaderProgram, "flashlightColor"), 1.0f, 1.0f, 0.6f); // LIGHT YELLOW
+glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 3.0f); // HIGHER = smoother edges
 
     glUniform3fv(fogColorLoc, 1, &fogColor[0]);
     glUniform1f(fogStartLoc, fogStart);
@@ -913,31 +970,35 @@ GLuint loadTexture(const char *filename)
 
 int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
 {
-    // Create a vertex array
-    GLuint vertexArrayObject;
-    glGenVertexArrays(1, &vertexArrayObject);
-    glBindVertexArray(vertexArrayObject);
+ // Create a vertex array
+ GLuint vertexArrayObject;
+ glGenVertexArrays(1, &vertexArrayObject);
+ glBindVertexArray(vertexArrayObject);
 
-    // Upload Vertex Buffer to the GPU
-    GLuint vertexBufferObject;
-    glGenBuffers(1, &vertexBufferObject);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObject);
-    glBufferData(GL_ARRAY_BUFFER, arraySize, vertexArray, GL_STATIC_DRAW);
+ // Upload Vertex Buffer to the GPU
+ GLuint vertexBufferObject;
+ glGenBuffers(1, &vertexBufferObject);
+ glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObject);
+ glBufferData(GL_ARRAY_BUFFER, arraySize, vertexArray, GL_STATIC_DRAW);
 
-    // Position attribute (location 0)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(glm::vec3), (void*)0);
-    glEnableVertexAttribArray(0);
+ // Position attribute (location 0)
+ glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 4*sizeof(glm::vec3), (void*)0);
+ glEnableVertexAttribArray(0);
 
-    // Color attribute (location 1)
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3*sizeof(glm::vec3), (void*)sizeof(glm::vec3));
-    glEnableVertexAttribArray(1);
+ // Color attribute (location 1)
+ glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 4*sizeof(glm::vec3), (void*)sizeof(glm::vec3));
+ glEnableVertexAttribArray(1);
 
-    // UV coordinate attribute (location 2) - Note: using only X and Y components
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 3*sizeof(glm::vec3), (void*)(2*sizeof(glm::vec3)));
-    glEnableVertexAttribArray(2);
+ // UV coordinate attribute (location 2) - using only X and Y components
+ glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 4*sizeof(glm::vec3), (void*)(2*sizeof(glm::vec3)));
+ glEnableVertexAttribArray(2);
+ 
+ // Normal attribute (location 3)
+ glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 4*sizeof(glm::vec3), (void*)(3*sizeof(glm::vec3)));
+ glEnableVertexAttribArray(3);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+ glBindBuffer(GL_ARRAY_BUFFER, 0);
+ glBindVertexArray(0);
 
-    return vertexArrayObject;
+ return vertexArrayObject;
 }
