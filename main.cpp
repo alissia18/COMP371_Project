@@ -16,6 +16,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
+#include "OBJloaderV2.h"  //For loading .obj files using a polygon list format
+
+
 void mouse_callback (GLFWwindow* window, double xpos, double ypos);
 
 GLuint loadTexture(const char *filename);
@@ -60,6 +63,7 @@ const char* getVertexShaderSource()
                 "#version 330 core\n"
                 "layout (location = 0) in vec3 aPos;"
                 "layout (location = 1) in vec3 aColor;"
+                "layout (location = 2) in vec3 aNormal;"
                 ""
                 "uniform mat4 worldMatrix;" // expose world matrix
                 "uniform mat4 viewMatrix = mat4(1.0);" // expose view matrix
@@ -67,12 +71,14 @@ const char* getVertexShaderSource()
                 ""
                 "out vec3 vertexColor;"
                 "out vec3 FragPos;" // 💨 new: world-space position for fog
+                "out vec3 Normal;"
                 ""
                 "void main()"
                 "{"
                 "   vertexColor = aColor;"
                 "   vec4 worldPos = worldMatrix * vec4(aPos, 1.0);" // 💨 store world position
                 "   FragPos = worldPos.xyz;" // 💨 pass to fragment shader
+                "   Normal = mat3(transpose(inverse(worldMatrix))) * aNormal;"
                 "   mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;"
                 "   gl_Position = modelViewProjection * vec4( aPos.x, aPos.y, aPos.z, 1.0);"
                 "}";
@@ -85,6 +91,7 @@ const char* getFragmentShaderSource()
                 "#version 330 core\n"
                 "in vec3 vertexColor;"
                 "in vec3 FragPos;" // 💨 from vertex shader: world position of the fragment
+                "in vec3 Normal;"
                 "out vec4 FragColor;"
                 ""
                 "uniform float alpha;"
@@ -92,13 +99,38 @@ const char* getFragmentShaderSource()
                 "uniform vec3 fogColor;"        // 💨 color of the fog (e.g., swampy green)
                 "uniform float fogStart;"       // 💨 where fog starts (distance)
                 "uniform float fogEnd;"         // 💨 where fog is fully opaque"
+                "uniform vec3 lightPos;"
+                "uniform vec3 lightDir;"
+                "uniform float cutOff;"
+                "uniform float outerCutOff;"
+                "uniform vec3 lightAmbient;"
+                "uniform vec3 lightDiffuse;"
+                "uniform vec3 lightSpecular;"
+                "uniform float shininess;"
                 ""
                 "void main()"
                 "{"
-                "   float distance = length(cameraPos - FragPos);"      // distance to camera"
-                "   float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);" // 1 = no fog, 0 = full fog
-                "   vec3 finalColor = mix(fogColor, vertexColor, fogFactor);" // blend fog with original color
-                "   FragColor = vec4(finalColor, alpha);"
+                "    vec3 norm = normalize(Normal);"    // Normalize input normal
+                "    vec3 lightDirection = normalize(lightPos - FragPos);"    // Calculate light direction vector from fragment to light source
+                "    float theta = dot(lightDirection, normalize(-lightDir));"    // Calculate spotlight intensity (using cutoff)
+                "    float epsilon = cutOff - outerCutOff;"
+                "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
+                "    vec3 ambient = lightAmbient * vertexColor;"    // Ambient component
+                "    float diff = max(dot(norm, lightDirection), 0.0);"     // Diffuse component
+                "    vec3 diffuse = lightDiffuse * diff * vertexColor;"
+                "    vec3 viewDir = normalize(cameraPos - FragPos);"    // Specular component (view direction, reflect direction)
+                "    vec3 reflectDir = reflect(-lightDirection, norm);"
+                "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);"
+                "    vec3 specular = lightSpecular * spec;"
+                "    vec3 lighting = ambient + (diffuse + specular) * intensity;"    // Combine lighting components with spotlight intensity
+                "    vec3 baseColor = vertexColor;"
+                "    vec3 litColor = baseColor + intensity * lightDiffuse * vec3(1.0, 1.0, 0.6);"  // warm yellow flashlight
+                "    litColor = clamp(litColor, 0.0, 1.0);"
+                "    "
+                "    float distance = length(cameraPos - FragPos);"      // distance to camera"
+                "    float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);" // 1 = no fog, 0 = full fog
+                "    vec3 finalColor = clamp(mix(fogColor, litColor, fogFactor), 0.0, 1.0);" // blend fog with original color
+                "    FragColor = vec4(finalColor, alpha);"
                 "}";
 }
 
@@ -162,55 +194,15 @@ glm::vec3 squareArray[] = {
     glm::vec3( 1.0f,  0.0f, 0.0f),
 };
 
-// Cube model
-vec3 cubeArray[] = {  // position,                            color
-    vec3(-0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f), //left - red
-    vec3(-0.5f,-0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
-    vec3(-0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
-        
-    vec3(-0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f),
-    vec3(-0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 0.0f),
-    vec3(-0.5f, 0.5f,-0.5f), vec3(1.0f, 0.0f, 0.0f),
-        
-    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f), // far - blue
-    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
-    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
-        
-    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
-    vec3( 0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
-    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 0.0f, 1.0f),
-        
-    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f), // bottom - turquoise
-    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
-    vec3( 0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
-        
-    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f),
-    vec3(-0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 1.0f),
-    vec3(-0.5f,-0.5f,-0.5f), vec3(0.0f, 1.0f, 1.0f),
-        
-    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f), // near - green
-    vec3(-0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
-    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
-        
-    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
-    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
-    vec3( 0.5f,-0.5f, 0.5f), vec3(0.0f, 1.0f, 0.0f),
-        
-    vec3( 0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f), // right - purple
-    vec3( 0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
-    vec3( 0.5f, 0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
-        
-    vec3( 0.5f,-0.5f,-0.5f), vec3(1.0f, 0.0f, 1.0f),
-    vec3( 0.5f, 0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f),
-    vec3( 0.5f,-0.5f, 0.5f), vec3(1.0f, 0.0f, 1.0f),
-        
-    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.1f, 0.3f), // top - dark blue
-    vec3( 0.5f, 0.5f,-0.5f), vec3(0.0f, 0.1f, 0.3f),
-    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.1f, 0.3f),
-        
-    vec3( 0.5f, 0.5f, 0.5f), vec3(0.0f, 0.1f, 0.3f),
-    vec3(-0.5f, 0.5f,-0.5f), vec3(0.0f, 0.1f, 0.3f),
-    vec3(-0.5f, 0.5f, 0.5f), vec3(0.0f, 0.1f, 0.3f)
+glm::vec3 floorVertices[] = {
+    // positions           // colors            // normals
+    glm::vec3(-5.0f, 0.0f, -5.0f), glm::vec3(0.0f, 0.1f, 0.3f), glm::vec3(0.0f, 1.0f, 0.0f),
+    glm::vec3( 5.0f, 0.0f, -5.0f), glm::vec3(0.0f, 0.1f, 0.3f), glm::vec3(0.0f, 1.0f, 0.0f),
+    glm::vec3( 5.0f, 0.0f,  5.0f), glm::vec3(0.0f, 0.1f, 0.3f), glm::vec3(0.0f, 1.0f, 0.0f),
+
+    glm::vec3(-5.0f, 0.0f, -5.0f), glm::vec3(0.0f, 0.1f, 0.3f), glm::vec3(0.0f, 1.0f, 0.0f),
+    glm::vec3( 5.0f, 0.0f,  5.0f), glm::vec3(0.0f, 0.1f, 0.3f), glm::vec3(0.0f, 1.0f, 0.0f),
+    glm::vec3(-5.0f, 0.0f,  5.0f), glm::vec3(0.0f, 0.1f, 0.3f), glm::vec3(0.0f, 1.0f, 0.0f),
 };
 
 glm::vec3 skyboxCube[] = {  
@@ -381,7 +373,7 @@ int createVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
                           3,                   // size
                           GL_FLOAT,            // type
                           GL_FALSE,            // normalized?
-                          2*sizeof(glm::vec3), // stride - each vertex contain 2 vec3 (position, color)
+                          3*sizeof(glm::vec3), // stride - each vertex contain 2 vec3 (position, color)
                           (void*)0             // array buffer offset
                           );
     glEnableVertexAttribArray(0);
@@ -391,10 +383,21 @@ int createVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
                           3,
                           GL_FLOAT,
                           GL_FALSE,
-                          2*sizeof(glm::vec3),
+                          3*sizeof(glm::vec3),
                           (void*)sizeof(glm::vec3)      // color is offseted a vec3 (comes after position)
                           );
     glEnableVertexAttribArray(1);
+
+        // Normals (attribute 2)
+    glVertexAttribPointer(
+        2,
+        3,
+        GL_FLOAT,
+        GL_FALSE,
+        3 * sizeof(glm::vec3),       // same stride
+        (void*)(2 * sizeof(glm::vec3)) // offset: after position and color
+    );
+    glEnableVertexAttribArray(2);
 
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
@@ -433,6 +436,59 @@ void mouse_callback (GLFWwindow* window, double xpos, double ypos) {
    front.z = sin(radians(yaw)) * cos(radians(pitch));
    cameraFront = normalize(front);
 }
+
+//Sets up a model using an Element Buffer Object to refer to vertex data
+GLuint setupModelEBO(string path, int& vertexCount)
+{
+	vector<int> vertexIndices; //The contiguous sets of three indices of vertices, normals and UVs, used to make a triangle
+	vector<glm::vec3> vertices;
+	vector<glm::vec3> normals;
+	vector<glm::vec2> UVs;
+
+	//read the vertices from the cube.obj file
+	//We won't be needing the normals or UVs for this program
+	loadOBJ2(path.c_str(), vertexIndices, vertices, normals, UVs);
+
+	GLuint VAO;
+	glGenVertexArrays(1, &VAO);
+	glBindVertexArray(VAO); //Becomes active VAO
+	// Bind the Vertex Array Object first, then bind and set vertex buffer(s) and attribute pointer(s).
+
+	//Vertex VBO setup
+	GLuint vertices_VBO;
+	glGenBuffers(1, &vertices_VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, vertices_VBO);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices.front(), GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+
+	//Normals VBO setup
+	GLuint normals_VBO;
+	glGenBuffers(1, &normals_VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, normals_VBO);
+	glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals.front(), GL_STATIC_DRAW);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(1);
+
+	//UVs VBO setup
+	GLuint uvs_VBO;
+	glGenBuffers(1, &uvs_VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, uvs_VBO);
+	glBufferData(GL_ARRAY_BUFFER, UVs.size() * sizeof(glm::vec2), &UVs.front(), GL_STATIC_DRAW);
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(2);
+
+	//EBO setup
+	GLuint EBO;
+	glGenBuffers(1, &EBO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, vertexIndices.size() * sizeof(int), &vertexIndices.front(), GL_STATIC_DRAW);
+
+	glBindVertexArray(0); // Unbind VAO (it's always a good thing to unbind any buffer/array to prevent strange bugs), remember: do NOT unbind the EBO, keep it bound to this VAO
+	vertexCount = vertexIndices.size();
+	return VAO;
+}
+
 
 
 int main(int argc, char*argv[])
@@ -479,7 +535,7 @@ int main(int argc, char*argv[])
 
     // Other OpenGL states to set once
     // Enable Backface culling
-   // glEnable(GL_CULL_FACE);
+   //glEnable(GL_CULL_FACE);
 
    glfwWindowHint(GL_DEPTH_BITS, 24);
     
@@ -494,12 +550,27 @@ int main(int argc, char*argv[])
     GLuint mushroom5TextureID = loadTexture("Textures/mushroom5.png");
     GLuint mushroom6TextureID = loadTexture("Textures/mushroom6.png");
     GLuint mushroomTextureIDs[] = {mushroom1TextureID, mushroom2TextureID, mushroom3TextureID, mushroom4TextureID, mushroom5TextureID, mushroom6TextureID};
+    GLuint mushroomTextureID = loadTexture("Textures/mushroom_texture.png");
     GLuint flowerTextureID = loadTexture("Textures/flower.png");
     GLuint waterTextureID = loadTexture("Textures/water.png");
     GLuint dragonflyBodyTextureID = loadTexture("Textures/dragonfly.png");
     GLuint wingTextureID = loadTexture("Textures/wings.png");
     GLuint skyboxTextureID = loadTexture("Textures/skybox.png");
+    GLuint plantTextureID = loadTexture("Textures/plant_texture.png");
     glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
+
+    // mushroom 3d model
+    string mushroomPath = "Models/mushroom.obj";
+    int mushroomVertices;
+
+    GLuint mushroomVAO = setupModelEBO(mushroomPath, mushroomVertices);
+
+    //plant 3d model
+    string plantPath = "Models/plant.obj";
+    int plantVertices;
+    
+    GLuint plantVAO = setupModelEBO(plantPath, plantVertices);
+
     
     // Compile and link shaders here ...
     int colorShaderProgram = compileAndLinkShaders(getVertexShaderSource(), getFragmentShaderSource());
@@ -510,20 +581,45 @@ int main(int argc, char*argv[])
     
     // Define and upload geometry to the GPU here ...
     int squareAO = createVertexArrayObject(squareArray, sizeof(squareArray));
-    int groundVAO = createVertexArrayObject(cubeArray, sizeof(cubeArray));
+    int floorVAO = createVertexArrayObject(floorVertices, sizeof(floorVertices));
     int mushroomPlaneVAO = createTexturedVertexArrayObject(mushroomPlane, sizeof(mushroomPlane));
     int flowerPlaneVAO = createTexturedVertexArrayObject(flowerPlane, sizeof(flowerPlane));
     int dragonflyPlaneVAO = createTexturedVertexArrayObject(dragonflyPlane, sizeof(dragonflyPlane));
     int skyboxVAO = createTexturedVertexArrayObject(skyboxCube, sizeof(skyboxCube));
 
+    // mushroom scale values
+
+    glm::vec3 mushroomScales[] = {
+        glm::vec3(2,2,2),  // left front
+        glm::vec3(1,1,1),  // left middle
+        glm::vec3(3,3,3),  // left back
+        glm::vec3(1,1,1), // right front
+        glm::vec3(3,3,3), // right middle
+        glm::vec3(2,2,2), // right back
+    };
+
+    
+    glm::vec3 plantScales[] = {
+        glm::vec3(4,4,4),  // left front
+        glm::vec3(3,3,3),  // left middle
+    };
+
+
     // Mushroom positions
     glm::vec3 mushroomPositions[] = {
         glm::vec3(-8.0f, 0.0f, 1.0f),  // left front
-        glm::vec3( -9.0f, 0.0f, 3.0f),  // left middle
-        glm::vec3( -10.0f, 0.0f, 5.0f),  // left back
+        glm::vec3( -12.0f, 0.0f, 4.0f),  // left middle
+        glm::vec3( -10.0f, 0.0f, 6.0f),  // left back
         glm::vec3(-3.0f, 0.0f, 1.3f), // right front
-        glm::vec3(-2.0f, 0.0f, 3.3f), // right middle
-        glm::vec3(-1.0f, 0.0f, 5.3f), // right back
+        glm::vec3(2.0f, 0.0f, 4.3f), // right middle
+        glm::vec3(-1.0f, 0.0f, 6.3f), // right back
+    };
+
+    // Plant positions
+    int nbPlantPos = 2;
+    vec3 plantPositions[] = {
+        vec3(-7.0f, 0.0f, 2.5f),
+        vec3(-1.0f, 0.0f, 3.3f)
     };
 
     vec3 flowerPosition = vec3(-2.0f, 0.0f, 8.0f);
@@ -598,6 +694,17 @@ while(!glfwWindowShouldClose(window))
     // Draw color geometry (ground)
     glUseProgram(colorShaderProgram);
 
+    // Set spotlight (flashlight) uniforms
+    glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightPos"), 1, &cameraPos[0]);
+    glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightDir"), 1, &cameraFront[0]);
+
+    glUniform1f(glGetUniformLocation(colorShaderProgram, "cutOff"), glm::cos(glm::radians(12.5f)));
+    glUniform1f(glGetUniformLocation(colorShaderProgram, "outerCutOff"), glm::cos(glm::radians(17.5f)));
+
+    glUniform3f(glGetUniformLocation(colorShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
+    glUniform3f(glGetUniformLocation(colorShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
+    glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
+
     // Send fog uniforms to color shader
     GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
     GLuint fogStartLoc = glGetUniformLocation(colorShaderProgram, "fogStart");
@@ -625,7 +732,7 @@ while(!glfwWindowShouldClose(window))
     glm::mat4 groundWorldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.01f, 0.0f)) *
                                   glm::scale(glm::mat4(1.0f), glm::vec3(1000.0f, 0.02f, 1000.0f));
 
-    glBindVertexArray(groundVAO);
+    glBindVertexArray(floorVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, 36);
 
@@ -658,15 +765,25 @@ while(!glfwWindowShouldClose(window))
     textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
 
     // Draw mushroom planes
-    glBindVertexArray(mushroomPlaneVAO);
+    glBindVertexArray(mushroomVAO);
+
     for (int i = 0; i < 6; ++i) {
-        glBindTexture(GL_TEXTURE_2D, mushroomTextureIDs[i]);
-        glUniform1i(textureLocation, 0);        
-
-        glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * glm::scale(glm::mat4(1.0f), vec3(2,2,2));
-
+       // glBindTexture(GL_TEXTURE_2D, mushroomTextureIDs[i]);
+        glBindTexture(GL_TEXTURE_2D, mushroomTextureID);
+        glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * glm::scale(glm::mat4(1.0f), mushroomScales[i]);
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
+    }
+
+    // draw 3d plants
+    glBindVertexArray(plantVAO);
+    glBindTexture(GL_TEXTURE_2D, plantTextureID);
+
+    for(int i = 0; i < nbPlantPos; i++){
+        mat4 plantMatrix = translate(mat4(1.0f), plantPositions[i]) * scale(mat4(1.0f), plantScales[i]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
+        glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
     }
 
     // Define the stem offset relative to flower center
