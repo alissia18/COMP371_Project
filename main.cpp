@@ -556,6 +556,7 @@ int main(int argc, char*argv[])
     GLuint dragonflyBodyTextureID = loadTexture("Textures/dragonfly.png");
     GLuint wingTextureID = loadTexture("Textures/wings.png");
     GLuint skyboxTextureID = loadTexture("Textures/skybox.png");
+    GLuint plantTextureID = loadTexture("Textures/plant_texture.png");
     glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
 
     // mushroom 3d model
@@ -563,6 +564,12 @@ int main(int argc, char*argv[])
     int mushroomVertices;
 
     GLuint mushroomVAO = setupModelEBO(mushroomPath, mushroomVertices);
+
+    //plant 3d model
+    string plantPath = "Models/plant.obj";
+    int plantVertices;
+    
+    GLuint plantVAO = setupModelEBO(plantPath, plantVertices);
 
     
     // Compile and link shaders here ...
@@ -591,6 +598,12 @@ int main(int argc, char*argv[])
         glm::vec3(2,2,2), // right back
     };
 
+    
+    glm::vec3 plantScales[] = {
+        glm::vec3(4,4,4),  // left front
+        glm::vec3(3,3,3),  // left middle
+    };
+
 
     // Mushroom positions
     glm::vec3 mushroomPositions[] = {
@@ -600,6 +613,13 @@ int main(int argc, char*argv[])
         glm::vec3(-3.0f, 0.0f, 1.3f), // right front
         glm::vec3(2.0f, 0.0f, 4.3f), // right middle
         glm::vec3(-1.0f, 0.0f, 6.3f), // right back
+    };
+
+    // Plant positions
+    int nbPlantPos = 2;
+    vec3 plantPositions[] = {
+        vec3(-7.0f, 0.0f, 2.5f),
+        vec3(-1.0f, 0.0f, 3.3f)
     };
 
     vec3 flowerPosition = vec3(-2.0f, 0.0f, 8.0f);
@@ -745,24 +765,27 @@ while(!glfwWindowShouldClose(window))
     textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
 
     // Draw mushroom planes
-    glBindVertexArray(mushroomPlaneVAO);
+    glBindVertexArray(mushroomVAO);
+
     for (int i = 0; i < 6; ++i) {
        // glBindTexture(GL_TEXTURE_2D, mushroomTextureIDs[i]);
-      //  glUniform1i(textureLocation, 0);        
-
-        glBindVertexArray(mushroomVAO);
         glBindTexture(GL_TEXTURE_2D, mushroomTextureID);
-
         glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * glm::scale(glm::mat4(1.0f), mushroomScales[i]);
-
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
-        // glDrawArrays(GL_TRIANGLES, 0, 6);
 
         glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
     }
 
+    // draw 3d plants
+    glBindVertexArray(plantVAO);
+    glBindTexture(GL_TEXTURE_2D, plantTextureID);
 
-    
+    for(int i = 0; i < nbPlantPos; i++){
+        mat4 plantMatrix = translate(mat4(1.0f), plantPositions[i]) * scale(mat4(1.0f), plantScales[i]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
+        glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
+    }
+
     // Define the stem offset relative to flower center
     glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
 
