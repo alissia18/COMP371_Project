@@ -46,6 +46,7 @@ bool fKeyPressed = false;
 vec3 cameraPos   = vec3(0.0f, 1.0f,  10.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
 vec3 cameraUp = vec3(0.0f, 1.0f, 0.0f);
+vec3 cameraRight = normalize(cross(cameraFront, cameraUp));
 float yaw = -90.0f; // initialized to -90 because 0 results in pointing to the right, -90 makes it forward
 float pitch = 0.0f;
 // float fov = 45.0f;
@@ -740,7 +741,12 @@ while(!glfwWindowShouldClose(window))
     glUseProgram(colorShaderProgram);
 
     // Set spotlight (flashlight) uniforms
-    glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightPos"), 1, &cameraPos[0]);
+    vec3 lightOffset = cameraFront * 1.0f +     // flashlight points slightly ahead
+                       cameraRight * 0.4f +     // to the right
+                      -cameraUp * 0.3f;        // slightly downward
+    vec3 flashlightPos = cameraPos + lightOffset;
+
+    glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightPos"), 1, &flashlightPos[0]);
     glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightDir"), 1, &cameraFront[0]);
 
     glUniform1f(glGetUniformLocation(colorShaderProgram, "cutOff"), glm::cos(glm::radians(12.5f)));
@@ -796,7 +802,7 @@ while(!glfwWindowShouldClose(window))
     fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
     camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
 
-    glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightPos"), 1, &cameraPos[0]);
+    glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightPos"), 1, &flashlightPos[0]);
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightDir"), 1, &cameraFront[0]);
 
     glUniform1f(glGetUniformLocation(texturedShaderProgram, "cutOff"), glm::cos(glm::radians(12.5f)));
