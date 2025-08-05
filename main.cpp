@@ -38,6 +38,10 @@ int compileAndLinkShaders(const char* vertexShaderSource, const char* fragmentSh
 using namespace glm;
 using namespace std;
 
+// flashlight variables
+bool flashlightOn = true;
+bool fKeyPressed = false;
+
 // camera movement
 vec3 cameraPos   = vec3(0.0f, 1.0f,  10.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
@@ -743,8 +747,14 @@ while(!glfwWindowShouldClose(window))
     glUniform1f(glGetUniformLocation(colorShaderProgram, "outerCutOff"), glm::cos(glm::radians(17.5f)));
 
     glUniform3f(glGetUniformLocation(colorShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
-    glUniform3f(glGetUniformLocation(colorShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
-    glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
+    glUniform3f(glGetUniformLocation(colorShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
+    if (flashlightOn) {
+        glUniform3f(glGetUniformLocation(colorShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
+        glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
+    } else {
+        glUniform3f(glGetUniformLocation(colorShaderProgram, "lightDiffuse"), 0.0f, 0.0f, 0.0f);
+        glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 0.0f, 0.0f, 0.0f);
+    }
 
     // Send fog uniforms to color shader
     GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
@@ -787,20 +797,27 @@ while(!glfwWindowShouldClose(window))
     camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
 
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightPos"), 1, &cameraPos[0]);
-glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightDir"), 1, &cameraFront[0]);
+    glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightDir"), 1, &cameraFront[0]);
 
-glUniform1f(glGetUniformLocation(texturedShaderProgram, "cutOff"), glm::cos(glm::radians(12.5f)));
-glUniform1f(glGetUniformLocation(texturedShaderProgram, "outerCutOff"), glm::cos(glm::radians(17.5f)));
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "cutOff"), glm::cos(glm::radians(12.5f)));
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "outerCutOff"), glm::cos(glm::radians(17.5f)));
 
-glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
-glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
-glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
-glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 32.0f);
+    glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
+    if (flashlightOn) {
+        glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
+        glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
+        glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.5f);
+    } else {
+        glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightDiffuse"), 0.0f, 0.0f, 0.0f);
+        glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightSpecular"), 0.0f, 0.0f, 0.0f);
+        glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.0f);
+    }
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 32.0f);
 
-// 🔧 KEY CUSTOMIZATION PARAMETERS:
-glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.5f);  // LOWER = more transparent
-glUniform3f(glGetUniformLocation(texturedShaderProgram, "flashlightColor"), 1.0f, 1.0f, 0.6f); // LIGHT YELLOW
-glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 3.0f); // HIGHER = smoother edges
+    // 🔧 KEY CUSTOMIZATION PARAMETERS:
+    //glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.5f);  // LOWER = more transparent
+    glUniform3f(glGetUniformLocation(texturedShaderProgram, "flashlightColor"), 1.0f, 1.0f, 0.6f); // LIGHT YELLOW
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 3.0f); // HIGHER = smoother edges
 
     glUniform3fv(fogColorLoc, 1, &fogColor[0]);
     glUniform1f(fogStartLoc, fogStart);
@@ -913,6 +930,17 @@ glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 3.
     // escape
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+
+    // F for flashlight
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
+        if (!fKeyPressed) {
+            flashlightOn = !flashlightOn;  // toggle flashlight
+            fKeyPressed = true;
+        }
+    }
+    else {
+        fKeyPressed = false;
+    }
 
     float cameraSpeed = 2.5 * deltaTime; // adjust accordingly
 
