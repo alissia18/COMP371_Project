@@ -773,9 +773,9 @@ int main(int argc, char*argv[])
     };
 
     int nbSpecialPlants = 3;
-    vec3 specialPlantPosition1 = vec3(0.0f, 0.0f, 5.5f);
-    vec3 specialPlantPosition2 = vec3(4.0f, 0.0f, 3.7f);
-    vec3 specialPlantPosition3 = vec3(-8.0f, 0.0f, 4.5f);
+    vec3 specialPlantPosition1 = vec3(-3.0f, 0.0f, 9.5f);
+    vec3 specialPlantPosition2 = vec3(4.0f, 0.0f, 3.0f);
+    vec3 specialPlantPosition3 = vec3(-11.0f, 0.0f, 8.5f);
 
     vec3 flowerPosition = vec3(-2.0f, 0.0f, 8.0f);
     vec3 dragonflyPosition = vec3(-2.25f, 0.35f, 8.01f);
@@ -1028,14 +1028,14 @@ while(!glfwWindowShouldClose(window))
 
     // checking whether the player is in contact with any of the special plants
     
-    if(distance(cameraPos, specialPlantPosition1) <= 1){
+    if(distance(cameraPos, specialPlantPosition1) <= 2){
         specialPlant1Collected = true;
     }
 
-    if(distance(cameraPos, specialPlantPosition2) <= 1){
+    if(distance(cameraPos, specialPlantPosition2) <= 2){
         specialPlant2Collected = true;
     }
-    if(distance(cameraPos, specialPlantPosition3) <= 1){
+    if(distance(cameraPos, specialPlantPosition3) <= 2){
         specialPlant3Collected = true;
     }
 
