@@ -701,6 +701,7 @@ int main(int argc, char*argv[])
     GLuint wingTextureID = loadTexture("Textures/wings.png");
     GLuint skyboxTextureID = loadTexture("Textures/skybox.png");
     GLuint plantTextureID = loadTexture("Textures/plant_texture.png");
+    GLuint specialPlantTextureID = loadTexture("Textures/plant_texture.png"); // TODO: Replace with special plant texture
     glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
 
     // mushroom 3d model
@@ -714,6 +715,11 @@ int main(int argc, char*argv[])
     int plantVertices;
     
     GLuint plantVAO = setupModelEBO(plantPath, plantVertices);
+
+    // special plant model TODO: Replace with actual plant model
+    string specialPlantPath = "Models/plant.obj";
+    int specialPlantVertices;
+    GLuint specialPlantVAO = setupModelEBO(specialPlantPath, specialPlantVertices);
 
     
     // Compile and link shaders here ...
@@ -760,16 +766,23 @@ int main(int argc, char*argv[])
     };
 
     // Plant positions
-    int nbPlantPos = 2;
+    int nbPlants = 2;
     vec3 plantPositions[] = {
         vec3(-7.0f, 0.0f, 2.5f),
         vec3(-1.0f, 0.0f, 3.3f)
     };
 
+    int nbSpecialPlants = 3;
+    vec3 specialPlantPosition1 = vec3(0.0f, 0.0f, 5.5f);
+    vec3 specialPlantPosition2 = vec3(4.0f, 0.0f, 3.7f);
+    vec3 specialPlantPosition3 = vec3(-8.0f, 0.0f, 4.5f);
+
     vec3 flowerPosition = vec3(-2.0f, 0.0f, 8.0f);
     vec3 dragonflyPosition = vec3(-2.25f, 0.35f, 8.01f);
     vec3 wingPositionFront = vec3(-2.15f,0.43f, 8.02f);
     vec3 wingPositionBack = vec3(-2.15f,0.43f, 7.98f);
+
+    bool specialPlant1Collected = false, specialPlant2Collected = false, specialPlant3Collected = false;
 
     // Variables to be used later in tutorial
     float angle = 0;
@@ -986,10 +999,44 @@ while(!glfwWindowShouldClose(window))
     glBindVertexArray(plantVAO);
     glBindTexture(GL_TEXTURE_2D, plantTextureID);
 
-    for(int i = 0; i < nbPlantPos; i++){
+    for(int i = 0; i < nbPlants; i++){
         mat4 plantMatrix = translate(mat4(1.0f), plantPositions[i]) * scale(mat4(1.0f), plantScales[i]);
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
         glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
+    }
+
+    // draw special plants
+    glBindVertexArray(specialPlantVAO);
+    glBindTexture(GL_TEXTURE_2D, specialPlantTextureID);
+
+    if(!specialPlant1Collected){
+        mat4 specialPlant1Matrix = translate(mat4(1.0f), specialPlantPosition1) * scale(mat4(1.0f), vec3(2.0f, 4.0f, 2.0f));
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant1Matrix[0][0]);
+        glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    }
+    if(!specialPlant2Collected){
+        mat4 specialPlant2Matrix = translate(mat4(1.0f), specialPlantPosition2) * scale(mat4(1.0f), vec3(2.0f, 4.0f, 2.0f));
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant2Matrix[0][0]);
+        glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    }
+
+    if(!specialPlant3Collected){
+        mat4 specialPlant3Matrix = translate(mat4(1.0f), specialPlantPosition3) * scale(mat4(1.0f), vec3(2.0f, 4.0f, 2.0f));
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant3Matrix[0][0]);
+        glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    }
+
+    // checking whether the player is in contact with any of the special plants
+    
+    if(distance(cameraPos, specialPlantPosition1) <= 1){
+        specialPlant1Collected = true;
+    }
+
+    if(distance(cameraPos, specialPlantPosition2) <= 1){
+        specialPlant2Collected = true;
+    }
+    if(distance(cameraPos, specialPlantPosition3) <= 1){
+        specialPlant3Collected = true;
     }
 
     // Define the stem offset relative to flower center
