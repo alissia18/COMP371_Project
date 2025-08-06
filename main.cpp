@@ -93,50 +93,81 @@ const char* getVertexShaderSource()
 const char* getFragmentShaderSource()
 {
     return
-                "#version 330 core\n"
-                "in vec3 vertexColor;"
-                "in vec3 FragPos;" // 💨 from vertex shader: world position of the fragment
-                "in vec3 Normal;"
-                "out vec4 FragColor;"
-                ""
-                "uniform float alpha;"
-                "uniform vec3 cameraPos;"       // 💨 to calculate distance to camera
-                "uniform vec3 fogColor;"        // 💨 color of the fog (e.g., swampy green)
-                "uniform float fogStart;"       // 💨 where fog starts (distance)
-                "uniform float fogEnd;"         // 💨 where fog is fully opaque"
-                "uniform vec3 lightPos;"
-                "uniform vec3 lightDir;"
-                "uniform float cutOff;"
-                "uniform float outerCutOff;"
-                "uniform vec3 lightAmbient;"
-                "uniform vec3 lightDiffuse;"
-                "uniform vec3 lightSpecular;"
-                "uniform float shininess;"
-                ""
-                "void main()"
-                "{"
-                "    vec3 norm = normalize(Normal);"    // Normalize input normal
-                "    vec3 lightDirection = normalize(lightPos - FragPos);"    // Calculate light direction vector from fragment to light source
-                "    float theta = dot(lightDirection, normalize(-lightDir));"    // Calculate spotlight intensity (using cutoff)
-                "    float epsilon = cutOff - outerCutOff;"
-                "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
-                "    vec3 ambient = lightAmbient * vertexColor;"    // Ambient component
-                "    float diff = max(dot(norm, lightDirection), 0.0);"     // Diffuse component
-                "    vec3 diffuse = lightDiffuse * diff * vertexColor;"
-                "    vec3 viewDir = normalize(cameraPos - FragPos);"    // Specular component (view direction, reflect direction)
-                "    vec3 reflectDir = reflect(-lightDirection, norm);"
-                "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);"
-                "    vec3 specular = lightSpecular * spec;"
-                "    vec3 lighting = ambient + (diffuse + specular) * intensity;"    // Combine lighting components with spotlight intensity
-                "    vec3 baseColor = vertexColor;"
-                "    vec3 litColor = baseColor + intensity * lightDiffuse * vec3(1.0, 1.0, 0.6);"  // warm yellow flashlight
-                "    litColor = clamp(litColor, 0.0, 1.0);"
-                "    "
-                "    float distance = length(cameraPos - FragPos);"      // distance to camera"
-                "    float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);" // 1 = no fog, 0 = full fog
-                "    vec3 finalColor = clamp(mix(fogColor, litColor, fogFactor), 0.0, 1.0);" // blend fog with original color
-                "    FragColor = vec4(finalColor, alpha);"
-                "}";
+    "#version 330 core\n"
+    "in vec3 vertexColor;"
+    "in vec3 FragPos;" // 💨 from vertex shader: world position of the fragment
+    "in vec3 Normal;"
+    "out vec4 FragColor;"
+    ""
+    "uniform float alpha;"
+    "uniform vec3 cameraPos;"       // 💨 to calculate distance to camera
+    "uniform vec3 fogColor;"        // 💨 color of the fog (e.g., swampy green)
+    "uniform float fogStart;"       // 💨 where fog starts (distance)
+    "uniform float fogEnd;"         // 💨 where fog is fully opaque"
+    // Flashlight uniforms
+    "uniform vec3 lightPos;"
+    "uniform vec3 lightDir;"
+    "uniform float cutOff;"
+    "uniform float outerCutOff;"
+    "uniform vec3 lightAmbient;"
+    "uniform vec3 lightDiffuse;"
+    "uniform vec3 lightSpecular;"
+    "uniform float shininess;"
+    // Magical light uniforms
+    "uniform vec3 magicalLightPos;"
+    "uniform vec3 magicalLightColor;"
+    "uniform float magicalLightIntensity;"
+    "uniform float magicalLightRadius;"
+    ""
+    "void main()"
+    "{"
+    "    vec3 norm = normalize(Normal);"    // Normalize input normal
+    ""
+    // Flashlight calculations
+    "    vec3 lightDirection = normalize(lightPos - FragPos);"    // Calculate light direction vector from fragment to light source
+    "    float theta = dot(lightDirection, normalize(-lightDir));"    // Calculate spotlight intensity (using cutoff)
+    "    float epsilon = cutOff - outerCutOff;"
+    "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
+    ""
+    "    vec3 ambient = lightAmbient * vertexColor;"    // Ambient component
+    "    float diff = max(dot(norm, lightDirection), 0.0);"     // Diffuse component
+    "    vec3 diffuse = lightDiffuse * diff * vertexColor;"
+    "    vec3 viewDir = normalize(cameraPos - FragPos);"    // Specular component (view direction, reflect direction)
+    "    vec3 reflectDir = reflect(-lightDirection, norm);"
+    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);"
+    "    vec3 specular = lightSpecular * spec;"
+    "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"    // Combine lighting components with spotlight intensity
+    ""
+    // 🔧 FIXED MAGICAL LIGHT CALCULATIONS WITH FEATHERED EDGES
+    "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);"
+    "    float magicalDistance = length(magicalLightPos - FragPos);"
+    ""
+    // Create feathered edges for magical light
+    "    float magicalAttenuation = magicalLightIntensity / (1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance);"
+    "    float magicalFalloff = 1.0 - smoothstep(0.0, magicalLightRadius, magicalDistance);" // Smooth falloff
+    "    magicalFalloff = pow(magicalFalloff, 2.0);" // Feathered edges
+    "    magicalAttenuation *= magicalFalloff;"
+    "    "
+    "    float magicalDiff = max(dot(norm, magicalLightDir), 0.0);"
+    "    vec3 magicalDiffuse = magicalLightColor * magicalDiff * vertexColor * magicalAttenuation;"
+    ""
+    "    vec3 magicalReflectDir = reflect(-magicalLightDir, norm);"
+    "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), shininess * 0.5);" // Softer specular
+    "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.3;" // Reduced specular intensity
+    ""
+    "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;"
+    ""
+    // Combine all lighting
+    "    vec3 baseColor = vertexColor;"
+    "    vec3 litColor = baseColor + intensity * lightDiffuse * vec3(1.0, 1.0, 0.6);"  // warm yellow flashlight
+    "    litColor += magicalLighting;" // Add magical light contribution
+    "    litColor = clamp(litColor, 0.0, 1.0);"
+    "    "
+    "    float distance = length(cameraPos - FragPos);"      // distance to camera"
+    "    float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);" // 1 = no fog, 0 = full fog
+    "    vec3 finalColor = clamp(mix(fogColor, litColor, fogFactor), 0.0, 1.0);" // blend fog with original color
+    "    FragColor = vec4(finalColor, alpha);"
+    "}";
 }
 
 const char* getTexturedVertexShaderSource()
@@ -197,6 +228,12 @@ const char* getTexturedFragmentShaderSource()
     "uniform vec3 lightSpecular;"
     "uniform float shininess;"
     ""
+    // Magical light uniforms
+    "uniform vec3 magicalLightPos;"
+    "uniform vec3 magicalLightColor;"
+    "uniform float magicalLightIntensity;"
+    "uniform float magicalLightRadius;"
+    ""
     // KEY PARAMETERS FOR CUSTOMIZATION:
     "uniform float lightOpacity = 0.8;"        // OPACITY: Lower = more transparent light
     "uniform vec3 flashlightColor = vec3(1.0, 1.0, 0.6);" // COLOR: Yellow flashlight
@@ -232,11 +269,32 @@ const char* getTexturedFragmentShaderSource()
     "   float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);"
     "   vec3 specular = lightSpecular * spec;"
     ""
-    // Combine lighting with flashlight color and opacity
-    "   vec3 lighting = ambient + (diffuse + specular) * intensity;"
+    // Flashlight contribution
+    "   vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"
     "   vec3 baseColor = textureColor.rgb;"
     "   vec3 lightContribution = intensity * lightDiffuse * flashlightColor * lightOpacity;"
-    "   vec3 litColor = baseColor + lightContribution;"
+    ""
+    // 🔧 FIXED MAGICAL LIGHT CALCULATIONS WITH FEATHERED EDGES
+    "   vec3 magicalLightDir = normalize(magicalLightPos - FragPos);"
+    "   float magicalDistance = length(magicalLightPos - FragPos);"
+    ""
+    // Create feathered edges for magical light (similar to flashlight falloff)
+    "   float magicalAttenuation = magicalLightIntensity / (1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance);"
+    "   float magicalFalloff = 1.0 - smoothstep(0.0, magicalLightRadius, magicalDistance);" // Smooth falloff
+    "   magicalFalloff = pow(magicalFalloff, 2.0);" // Feathered edges (adjust power for softer/harder edges)
+    "   magicalAttenuation *= magicalFalloff;"
+    ""
+    "   float magicalDiff = max(dot(norm, magicalLightDir), 0.0);"
+    "   vec3 magicalDiffuse = magicalLightColor * magicalDiff * textureColor.rgb * magicalAttenuation;"
+    ""
+    "   vec3 magicalReflectDir = reflect(-magicalLightDir, norm);"
+    "   float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), shininess * 0.3);"
+    "   vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.2;"
+    ""
+    "   vec3 magicalLighting = magicalDiffuse + magicalSpecular;"
+    ""
+    // Combine all lighting
+    "   vec3 litColor = baseColor + lightContribution + magicalLighting;" // 🔧 FIXED: Now properly adds magical lighting
     "   litColor = clamp(litColor, 0.0, 1.0);"
     ""
     // Apply fog
@@ -313,6 +371,45 @@ glm::vec3 skyboxCube[] = {
     glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(1.0f, 0.25f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f),   // top-right
     glm::vec3(1.0f, 1.0f, -1.0f), glm::vec3(0.3f, 0.4f, 0.7f), glm::vec3(0.75f, 0.25f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)    // top-left
 };
+
+// Magical light orb geometry
+glm::vec3 lightOrbVertices[] = {
+    // Simple sphere approximation using triangles (8 triangles for simplicity)
+    // Top pyramid
+    glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),    // top
+    glm::vec3(0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),    // front-right
+    glm::vec3(0.0f, 0.0f, 0.5f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),    // front-left
+    
+    glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),    // top
+    glm::vec3(0.0f, 0.0f, 0.5f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),    // front-left
+    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),   // back-left
+    
+    glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),    // top
+    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),   // back-left
+    glm::vec3(0.0f, 0.0f, -0.5f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),   // back-right
+    
+    glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),    // top
+    glm::vec3(0.0f, 0.0f, -0.5f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),   // back-right
+    glm::vec3(0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, 1.0f, 0.0f),    // front-right
+    
+    // Bottom pyramid
+    glm::vec3(0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),   // front-right
+    glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),  // bottom
+    glm::vec3(0.0f, 0.0f, 0.5f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),   // front-left
+    
+    glm::vec3(0.0f, 0.0f, 0.5f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),   // front-left
+    glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),  // bottom
+    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),  // back-left
+    
+    glm::vec3(-0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),  // back-left
+    glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),  // bottom
+    glm::vec3(0.0f, 0.0f, -0.5f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),  // back-right
+    
+    glm::vec3(0.0f, 0.0f, -0.5f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),  // back-right
+    glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),  // bottom
+    glm::vec3(0.5f, 0.0f, 0.0f), glm::vec3(1.0f, 0.7f, 0.9f), glm::vec3(0.0f, -1.0f, 0.0f),   // front-right
+};
+
 glm::vec3 mushroomPlane[] = {
     // Triangle 1 - Normal points toward camera (0, 0, 1)
     glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), // bottom-left
@@ -632,6 +729,7 @@ int main(int argc, char*argv[])
     int flowerPlaneVAO = createTexturedVertexArrayObject(flowerPlane, sizeof(flowerPlane));
     int dragonflyPlaneVAO = createTexturedVertexArrayObject(dragonflyPlane, sizeof(dragonflyPlane));
     int skyboxVAO = createTexturedVertexArrayObject(skyboxCube, sizeof(skyboxCube));
+    int lightOrbVAO = createVertexArrayObject(lightOrbVertices, sizeof(lightOrbVertices)); // New magical light orb
 
     // mushroom scale values
 
@@ -699,6 +797,13 @@ while(!glfwWindowShouldClose(window))
     // increase rotation angle based on rotation speed and timestep
     angle = 2.0f * sin(glfwGetTime()); // note: angle is in deg, but glm expects rad (conversion below)
     
+    // Calculate magical light position (moves back and forth above mushrooms)
+    float lightTime = glfwGetTime() * 0.8f; // Slower movement
+    float lightX = -5.5f + 4.0f * sin(lightTime); // Oscillates between -9.5f and -1.5f (above mushrooms)
+    float lightY = 8.0f + 1.5f * sin(lightTime * 2.0f); // Slight vertical movement
+    float lightZ = 4.0f + 2.0f * cos(lightTime * 0.6f); // Some depth movement
+    vec3 magicalLightPos = vec3(lightX, lightY, lightZ);
+    
     // Calculate view matrix once for both shaders
     glm::mat4 viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
     
@@ -753,7 +858,6 @@ while(!glfwWindowShouldClose(window))
     glUniform1f(glGetUniformLocation(colorShaderProgram, "outerCutOff"), glm::cos(glm::radians(17.5f)));
 
     glUniform3f(glGetUniformLocation(colorShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
-    glUniform3f(glGetUniformLocation(colorShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
     if (flashlightOn) {
         glUniform3f(glGetUniformLocation(colorShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
         glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
@@ -761,6 +865,12 @@ while(!glfwWindowShouldClose(window))
         glUniform3f(glGetUniformLocation(colorShaderProgram, "lightDiffuse"), 0.0f, 0.0f, 0.0f);
         glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 0.0f, 0.0f, 0.0f);
     }
+
+    // Set magical light uniforms for color shader
+    glUniform3fv(glGetUniformLocation(colorShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
+    glUniform3f(glGetUniformLocation(colorShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f); // Light pink
+    glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightIntensity"), 15.0f);
+    glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightRadius"), 25.0f);
 
     // Send fog uniforms to color shader
     GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
@@ -793,6 +903,16 @@ while(!glfwWindowShouldClose(window))
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, 36);
 
+    // Draw magical light orb
+    /* glUniform1f(alphaLocation, 0.8f);
+    float orbPulse = 0.3f + 0.2f * sin(glfwGetTime() * 3.0f); // Pulsing scale
+    glm::mat4 orbMatrix = glm::translate(glm::mat4(1.0f), magicalLightPos) *
+                          glm::scale(glm::mat4(1.0f), glm::vec3(orbPulse, orbPulse, orbPulse));
+    
+    glBindVertexArray(lightOrbVAO);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &orbMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, 24); // 8 triangles * 3 vertices each */
+
     // Draw textured geometry
     glUseProgram(texturedShaderProgram);
 
@@ -820,10 +940,16 @@ while(!glfwWindowShouldClose(window))
     }
     glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 32.0f);
 
+    // Set magical light uniforms for textured shader
+    glUniform3fv(glGetUniformLocation(texturedShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
+    glUniform3f(glGetUniformLocation(texturedShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f); // Light pink
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightIntensity"), 25.0f);
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightRadius"), 35.0f);
+
     // 🔧 KEY CUSTOMIZATION PARAMETERS:
     //glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.5f);  // LOWER = more transparent
     glUniform3f(glGetUniformLocation(texturedShaderProgram, "flashlightColor"), 1.0f, 1.0f, 0.6f); // LIGHT YELLOW
-    glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 3.0f); // HIGHER = smoother edges
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 30.0f); // HIGHER = smoother edges
 
     glUniform3fv(fogColorLoc, 1, &fogColor[0]);
     glUniform1f(fogStartLoc, fogStart);
