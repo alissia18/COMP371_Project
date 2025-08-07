@@ -584,53 +584,59 @@ void mouse_callback (GLFWwindow* window, double xpos, double ypos) {
 //Sets up a model using an Element Buffer Object to refer to vertex data
 GLuint setupModelEBO(string path, int& vertexCount)
 {
-	vector<int> vertexIndices; //The contiguous sets of three indices of vertices, normals and UVs, used to make a triangle
-	vector<glm::vec3> vertices;
-	vector<glm::vec3> normals;
-	vector<glm::vec2> UVs;
+    vector<int> vertexIndices;
+    vector<glm::vec3> vertices;
+    vector<glm::vec3> normals;
+    vector<glm::vec2> UVs;
 
-	//read the vertices from the cube.obj file
-	//We won't be needing the normals or UVs for this program
-	loadOBJ2(path.c_str(), vertexIndices, vertices, normals, UVs);
+    loadOBJ2(path.c_str(), vertexIndices, vertices, normals, UVs);
 
-	GLuint VAO;
-	glGenVertexArrays(1, &VAO);
-	glBindVertexArray(VAO); //Becomes active VAO
-	// Bind the Vertex Array Object first, then bind and set vertex buffer(s) and attribute pointer(s).
+    GLuint VAO;
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
 
-	//Vertex VBO setup
-	GLuint vertices_VBO;
-	glGenBuffers(1, &vertices_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, vertices_VBO);
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices.front(), GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-	glEnableVertexAttribArray(0);
+    // Vertex positions (location 0)
+    GLuint vertices_VBO;
+    glGenBuffers(1, &vertices_VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, vertices_VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices.front(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
 
-	//Normals VBO setup
-	GLuint normals_VBO;
-	glGenBuffers(1, &normals_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, normals_VBO);
-	glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals.front(), GL_STATIC_DRAW);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-	glEnableVertexAttribArray(1);
+    // Create default white colors for all vertices (location 1)
+    vector<glm::vec3> colors(vertices.size(), glm::vec3(1.0f, 1.0f, 1.0f));
+    GLuint colors_VBO;
+    glGenBuffers(1, &colors_VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, colors_VBO);
+    glBufferData(GL_ARRAY_BUFFER, colors.size() * sizeof(glm::vec3), &colors.front(), GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(1);
 
-	//UVs VBO setup
-	GLuint uvs_VBO;
-	glGenBuffers(1, &uvs_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, uvs_VBO);
-	glBufferData(GL_ARRAY_BUFFER, UVs.size() * sizeof(glm::vec2), &UVs.front(), GL_STATIC_DRAW);
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), (GLvoid*)0);
-	glEnableVertexAttribArray(2);
+    // UVs (location 2)
+    GLuint uvs_VBO;
+    glGenBuffers(1, &uvs_VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, uvs_VBO);
+    glBufferData(GL_ARRAY_BUFFER, UVs.size() * sizeof(glm::vec2), &UVs.front(), GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(2);
 
-	//EBO setup
-	GLuint EBO;
-	glGenBuffers(1, &EBO);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, vertexIndices.size() * sizeof(int), &vertexIndices.front(), GL_STATIC_DRAW);
+    // Normals (location 3) - MOVED TO CORRECT LOCATION
+    GLuint normals_VBO;
+    glGenBuffers(1, &normals_VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, normals_VBO);
+    glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals.front(), GL_STATIC_DRAW);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(3);
 
-	glBindVertexArray(0); // Unbind VAO (it's always a good thing to unbind any buffer/array to prevent strange bugs), remember: do NOT unbind the EBO, keep it bound to this VAO
-	vertexCount = vertexIndices.size();
-	return VAO;
+    // EBO setup
+    GLuint EBO;
+    glGenBuffers(1, &EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, vertexIndices.size() * sizeof(int), &vertexIndices.front(), GL_STATIC_DRAW);
+
+    glBindVertexArray(0);
+    vertexCount = vertexIndices.size();
+    return VAO;
 }
 
 
@@ -701,7 +707,7 @@ int main(int argc, char*argv[])
     GLuint wingTextureID = loadTexture("Textures/wings.png");
     GLuint skyboxTextureID = loadTexture("Textures/skybox.png");
     GLuint plantTextureID = loadTexture("Textures/plant_texture.png");
-    GLuint specialPlantTextureID = loadTexture("Textures/plant_texture.png"); // TODO: Replace with special plant texture
+    GLuint specialPlantTextureID = loadTexture("Textures/special_plant_texture.png"); // TODO: Replace with special plant texture
     glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
 
     // mushroom 3d model
@@ -717,7 +723,7 @@ int main(int argc, char*argv[])
     GLuint plantVAO = setupModelEBO(plantPath, plantVertices);
 
     // special plant model TODO: Replace with actual plant model
-    string specialPlantPath = "Models/plant.obj";
+    string specialPlantPath = "Models/special_plant.obj";
     int specialPlantVertices;
     GLuint specialPlantVAO = setupModelEBO(specialPlantPath, specialPlantVertices);
 
