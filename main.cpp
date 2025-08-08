@@ -35,6 +35,14 @@ int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
 
 int compileAndLinkShaders(const char* vertexShaderSource, const char* fragmentShaderSource);
 
+void setupShadowMapping();
+
+void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 groundWorldMatrix, 
+                          GLuint mushroomVAO, glm::vec3* mushroomPositions, glm::vec3* mushroomScales, 
+                          int mushroomCount, int mushroomVertices,
+                          GLuint plantVAO, glm::vec3* plantPositions, glm::vec3* plantScales, 
+                          int plantCount, int plantVertices);
+
 using namespace glm;
 using namespace std;
 
@@ -60,6 +68,11 @@ float lastY = 600.0 / 2.0;
 float deltaTime = 0.0f; // time bw current and last frame
 float lastFrame = 0.0f;
 
+unsigned int depthMapFBO, depthMap;
+const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
+int shadowShaderProgram;
+int colorShaderProgramWithShadows;  // New shader program with shadows
+
 
 const char* getVertexShaderSource()
 {
@@ -75,14 +88,14 @@ const char* getVertexShaderSource()
                 "uniform mat4 projectionMatrix = mat4(1.0);"
                 ""
                 "out vec3 vertexColor;"
-                "out vec3 FragPos;" // 💨 new: world-space position for fog
+                "out vec3 FragPos;"
                 "out vec3 Normal;"
                 ""
                 "void main()"
                 "{"
                 "   vertexColor = aColor;"
-                "   vec4 worldPos = worldMatrix * vec4(aPos, 1.0);" // 💨 store world position
-                "   FragPos = worldPos.xyz;" // 💨 pass to fragment shader
+                "   vec4 worldPos = worldMatrix * vec4(aPos, 1.0);"
+                "   FragPos = worldPos.xyz;"
                 "   Normal = mat3(transpose(inverse(worldMatrix))) * aNormal;"
                 "   mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;"
                 "   gl_Position = modelViewProjection * vec4( aPos.x, aPos.y, aPos.z, 1.0);"
@@ -314,6 +327,213 @@ const char* getTexturedFragmentShaderSource()
     "   finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));"
     "   FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));"
     "}";
+}
+
+// Shadow Vertex Shader
+const char* getShadowVertexShaderSource()
+{
+    return
+    "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "\n"
+    "uniform mat4 lightSpaceMatrix;\n"
+    "uniform mat4 worldMatrix;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    gl_Position = lightSpaceMatrix * worldMatrix * vec4(aPos, 1.0);\n"
+    "}\n";
+}
+
+// Shadow Fragment Shader
+const char* getShadowFragmentShaderSource()
+{
+    return
+    "#version 330 core\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    // gl_FragDepth is written automatically\n"
+    "}\n";
+}
+
+// Updated Vertex Shader WITH shadow support
+const char* getVertexShaderSourceWithShadows()
+{
+    return
+    "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "layout (location = 1) in vec3 aColor;\n"
+    "layout (location = 2) in vec3 aNormal;\n"
+    "\n"
+    "uniform mat4 worldMatrix;\n"
+    "uniform mat4 viewMatrix = mat4(1.0);\n"
+    "uniform mat4 projectionMatrix = mat4(1.0);\n"
+    "uniform mat4 lightSpaceMatrix;\n"  // NEW: for shadow mapping
+    "\n"
+    "out vec3 vertexColor;\n"
+    "out vec3 FragPos;\n"
+    "out vec3 Normal;\n"
+    "out vec4 FragPosLightSpace;\n"  // NEW: for shadow mapping
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    vertexColor = aColor;\n"
+    "    vec4 worldPos = worldMatrix * vec4(aPos, 1.0);\n"
+    "    FragPos = worldPos.xyz;\n"
+    "    Normal = mat3(transpose(inverse(worldMatrix))) * aNormal;\n"
+    "    FragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);\n"  // NEW
+    "    mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;\n"
+    "    gl_Position = modelViewProjection * vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+    "}\n";
+}
+
+// Updated Fragment Shader WITH shadows (based on your exact working version)
+const char* getFragmentShaderSourceWithShadows()
+{
+    return
+    "#version 330 core\n"
+    "in vec3 vertexColor;\n"
+    "in vec3 FragPos;\n"
+    "in vec3 Normal;\n"
+    "in vec4 FragPosLightSpace;\n"  // NEW: for shadow mapping
+    "out vec4 FragColor;\n"
+    "\n"
+    "uniform float alpha;\n"
+    "uniform vec3 cameraPos;\n"
+    "uniform vec3 fogColor;\n"
+    "uniform float fogStart;\n"
+    "uniform float fogEnd;\n"
+    // Flashlight uniforms
+    "uniform vec3 lightPos;\n"
+    "uniform vec3 lightDir;\n"
+    "uniform float cutOff;\n"
+    "uniform float outerCutOff;\n"
+    "uniform vec3 lightAmbient;\n"
+    "uniform vec3 lightDiffuse;\n"
+    "uniform vec3 lightSpecular;\n"
+    "uniform float shininess;\n"
+    // Magical light uniforms
+    "uniform vec3 magicalLightPos;\n"
+    "uniform vec3 magicalLightColor;\n"
+    "uniform float magicalLightIntensity;\n"
+    "uniform float magicalLightRadius;\n"
+    // NEW: Shadow uniforms
+    "uniform sampler2D shadowMap;\n"
+    "uniform bool enableShadows;\n"
+    "\n"
+    // Shadow calculation function
+    "float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDirection)\n"
+    "{\n"
+    "    // Perform perspective divide\n"
+    "    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;\n"
+    "    // Transform to [0,1] range\n"
+    "    projCoords = projCoords * 0.5 + 0.5;\n"
+    "\n"
+    "    // Get closest depth value from light's perspective\n"
+    "    float closestDepth = texture(shadowMap, projCoords.xy).r;\n"
+    "    // Get depth of current fragment from light's perspective\n"
+    "    float currentDepth = projCoords.z;\n"
+    "\n"
+    "    // Calculate bias to prevent shadow acne\n"
+    "    float bias = max(0.05 * (1.0 - dot(normal, lightDirection)), 0.005);\n"
+    "\n"
+    "    // Check whether current frag pos is in shadow\n"
+    "    // PCF (Percentage-closer filtering) for softer shadows\n"
+    "    float shadow = 0.0;\n"
+    "    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);\n"
+    "    for(int x = -1; x <= 1; ++x)\n"
+    "    {\n"
+    "        for(int y = -1; y <= 1; ++y)\n"
+    "        {\n"
+    "            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;\n"
+    "            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
+    "        }\n"
+    "    }\n"
+    "    shadow /= 9.0;\n"
+    "\n"
+    "    // Keep the shadow at 0.0 when outside the far_plane region\n"
+    "    if(projCoords.z > 1.0)\n"
+    "        shadow = 0.0;\n"
+    "\n"
+    "    return shadow;\n"
+    "}\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    vec3 norm = normalize(Normal);\n"
+    "\n"
+    // ENHANCED BASE AMBIENT - This ensures objects are never completely black
+    "    vec3 globalAmbient = vec3(0.2, 0.2, 0.25);\n" // Slightly blue ambient light
+    "    vec3 baseColor = vertexColor * globalAmbient;\n"
+    "\n"
+    // Flashlight calculations
+    "    vec3 lightDirection = normalize(lightPos - FragPos);\n"
+    "    float theta = dot(lightDirection, normalize(-lightDir));\n"
+    "    float epsilon = max(cutOff - outerCutOff, 0.001);\n" // Prevent division by zero
+    "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);\n"
+    "\n"
+    // Enhanced flashlight lighting with minimum ambient
+    "    vec3 ambient = max(lightAmbient, vec3(0.1)) * vertexColor;\n" // Ensure minimum ambient
+    "    float diff = max(dot(norm, lightDirection), 0.0);\n"
+    "    vec3 diffuse = lightDiffuse * diff * vertexColor;\n"
+    "    vec3 viewDir = normalize(cameraPos - FragPos);\n"
+    "    vec3 reflectDir = reflect(-lightDirection, norm);\n"
+    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));\n" // Prevent shininess issues
+    "    vec3 specular = lightSpecular * spec;\n"
+    "\n"
+    // NEW: Calculate shadow factor
+    "    float shadow = 0.0;\n"
+    "    if(enableShadows && intensity > 0.0)\n"  // Only calculate shadows where flashlight illuminates
+    "    {\n"
+    "        shadow = ShadowCalculation(FragPosLightSpace, norm, lightDirection);\n"
+    "    }\n"
+    "\n"
+    // Apply shadows to diffuse and specular (but not ambient)\n"
+    "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity * (1.0 - shadow);\n"
+    "\n"
+    // IMPROVED MAGICAL LIGHT CALCULATIONS (unchanged)
+    "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);\n"
+    "    float magicalDistance = length(magicalLightPos - FragPos);\n"
+    "\n"
+    // Better attenuation with safeguards
+    "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);\n"
+    "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);\n"
+    "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);\n"
+    "    magicalAttenuation *= magicalFalloff;\n"
+    "\n"
+    "    float magicalDiff = max(dot(norm, magicalLightDir), 0.0);\n"
+    "    vec3 magicalDiffuse = magicalLightColor * magicalDiff * vertexColor * magicalAttenuation;\n"
+    "\n"
+    "    vec3 magicalReflectDir = reflect(-magicalLightDir, norm);\n"
+    "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.5, 1.0));\n"
+    "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.3;\n"
+    "\n"
+    "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;\n"
+    "\n"
+    // COMBINE ALL LIGHTING WITH PROPER BASE
+    "    vec3 litColor = baseColor + flashlightLighting + magicalLighting;\n"
+    "    litColor = clamp(litColor, vec3(0.0), vec3(1.0));\n"
+    "\n"
+    // Apply fog with safeguards
+    "    float distance = length(cameraPos - FragPos);\n"
+    "    float fogRange = max(fogEnd - fogStart, 0.1);\n" // Prevent division by zero
+    "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);\n"
+    "    vec3 finalColor = mix(fogColor, litColor, fogFactor);\n"
+    "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));\n"
+    "    FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));\n"
+    "}\n";
+}
+
+glm::mat4 getLightSpaceMatrix(glm::vec3 lightPos, glm::vec3 lightDir) 
+{
+    float near_plane = 1.0f, far_plane = 25.0f;
+    
+    // Create light's view matrix
+    glm::mat4 lightProjection = glm::perspective(glm::radians(90.0f), 1.0f, near_plane, far_plane);
+    glm::mat4 lightView = glm::lookAt(lightPos, lightPos + lightDir, glm::vec3(0.0, 1.0, 0.0));
+    
+    return lightProjection * lightView;
 }
 
 glm::vec3 floorVertices[] = {
@@ -733,7 +953,7 @@ int main(int argc, char*argv[])
     
     GLuint plantVAO = setupModelEBO(plantPath, plantVertices);
 
-    // special plant model TODO: Replace with actual plant model
+    // special plant model
     string specialPlantPath = "Models/special_plant.obj";
     int specialPlantVertices;
     GLuint specialPlantVAO = setupModelEBO(specialPlantPath, specialPlantVertices);
@@ -1230,4 +1450,70 @@ int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
  glBindVertexArray(0);
 
  return vertexArrayObject;
+}
+
+void setupShadowMapping() 
+{
+    // Generate depth map FBO
+    glGenFramebuffers(1, &depthMapFBO);
+    
+    // Create depth texture
+    glGenTextures(1, &depthMap);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+    
+    // Attach depth texture as FBO's depth buffer
+    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    
+    // Create shadow shader program
+    shadowShaderProgram = compileAndLinkShaders(getShadowVertexShaderSource(), getShadowFragmentShaderSource());
+    
+    // Create new color shader with shadow support
+    colorShaderProgramWithShadows = compileAndLinkShaders(getVertexShaderSourceWithShadows(), getFragmentShaderSourceWithShadows());
+}
+
+void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 groundWorldMatrix, 
+                          GLuint mushroomVAO, glm::vec3* mushroomPositions, glm::vec3* mushroomScales, 
+                          int mushroomCount, int mushroomVertices,
+                          GLuint plantVAO, glm::vec3* plantPositions, glm::vec3* plantScales, 
+                          int plantCount, int plantVertices) 
+{
+    glUseProgram(shadowShaderProgram);
+    
+    // Set light space matrix
+    glUniformMatrix4fv(glGetUniformLocation(shadowShaderProgram, "lightSpaceMatrix"), 1, GL_FALSE, &lightSpaceMatrix[0][0]);
+    GLuint worldMatrixLocation = glGetUniformLocation(shadowShaderProgram, "worldMatrix");
+    
+    // Render ground
+    glBindVertexArray(floorVAO);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, 6); // Floor has 6 vertices (2 triangles)
+    
+    // Render mushrooms
+    glBindVertexArray(mushroomVAO);
+    for (int i = 0; i < mushroomCount; ++i) {
+        glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * 
+                                   glm::scale(glm::mat4(1.0f), mushroomScales[i]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
+        glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
+    }
+    
+    // Render plants
+    glBindVertexArray(plantVAO);
+    for (int i = 0; i < plantCount; ++i) {
+        glm::mat4 plantMatrix = glm::translate(glm::mat4(1.0f), plantPositions[i]) * 
+                                glm::scale(glm::mat4(1.0f), plantScales[i]);
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
+        glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
+    }
 }
