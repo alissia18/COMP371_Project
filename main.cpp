@@ -973,7 +973,7 @@ while(!glfwWindowShouldClose(window))
         glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightSpecular"), 0.0f, 0.0f, 0.0f);
         glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.0f);
     }
-    glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 1.0f);
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 80.0f); // increased value 1 -> 80
 
     // Set magical light uniforms for textured shader
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
