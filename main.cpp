@@ -805,7 +805,6 @@ int main(int argc, char*argv[])
     float angle = 0;
     float rotationSpeed = 180.0f;  // 180 degrees per second
 
-    // ADD THIS HERE - BEFORE the while loop:
     glm::mat4 projectionMatrix = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
 
     // Entering Main Loop
@@ -900,10 +899,10 @@ while(!glfwWindowShouldClose(window))
     }
 
   // Set magical light with safer values
-glUniform3fv(glGetUniformLocation(colorShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
-glUniform3f(glGetUniformLocation(colorShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
-glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightIntensity"), 20.0f); // Increased
-glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightRadius"), 30.0f);   // Increased
+    glUniform3fv(glGetUniformLocation(colorShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
+    glUniform3f(glGetUniformLocation(colorShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
+    glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightIntensity"), 20.0f); // Increased
+    glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightRadius"), 30.0f);   // Increased
 
     // Send fog uniforms to color shader
     GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
@@ -956,7 +955,7 @@ glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightRadius"), 30.0
     camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
 
     // Enhanced ambient for textured objects
-glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.25f, 0.25f, 0.3f);
+    glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.25f, 0.25f, 0.3f);
 
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightPos"), 1, &flashlightPos[0]);
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightDir"), 1, &cameraFront[0]);
