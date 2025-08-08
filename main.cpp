@@ -938,7 +938,7 @@ int main(int argc, char*argv[])
     GLuint wingTextureID = loadTexture("Textures/wings.png");
     GLuint skyboxTextureID = loadTexture("Textures/skybox.png");
     GLuint plantTextureID = loadTexture("Textures/plant_texture.png");
-    GLuint specialPlantTextureID = loadTexture("Textures/special_plant_texture.png"); // TODO: Replace with special plant texture
+    GLuint specialPlantTextureID = loadTexture("Textures/special_plant_texture.png");
     glClearColor(0.03f, 0.03f, 0.11f, 1.0f); // night sky
 
     // mushroom 3d model
@@ -962,6 +962,8 @@ int main(int argc, char*argv[])
     // Compile and link shaders here ...
     int colorShaderProgram = compileAndLinkShaders(getVertexShaderSource(), getFragmentShaderSource());
     int texturedShaderProgram = compileAndLinkShaders(getTexturedVertexShaderSource(), getTexturedFragmentShaderSource());
+
+    setupShadowMapping();
 
     // alpha location
     GLuint alphaLocation = glGetUniformLocation(colorShaderProgram, "alpha");
@@ -1030,41 +1032,65 @@ int main(int argc, char*argv[])
     // Entering Main Loop
 while(!glfwWindowShouldClose(window))
 {
-    glm::vec3 fogColor = glm::vec3(0.15f, 0.25f, 0.4f); // Lighter fog color
-    float fogStart = 2.5f;   // Moved further back
-    float fogEnd = 15.0f;    // Increased range
+    glm::vec3 fogColor = glm::vec3(0.15f, 0.25f, 0.4f);
+    float fogStart = 2.5f;
+    float fogEnd = 15.0f;
 
-    // Each frame, reset color of each pixel to glClearColor
-    // Add the GL_DEPTH_BUFFER_BIT to glClear
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    // determining the timestep (frame duration) 
+    // Timing
     float currentFrame = glfwGetTime();
     deltaTime = currentFrame - lastFrame;
     lastFrame = currentFrame;
 
-    // increase rotation angle based on rotation speed and timestep
-    angle = 2.0f * sin(glfwGetTime()); // note: angle is in deg, but glm expects rad (conversion below)
+    angle = 2.0f * sin(glfwGetTime());
     
-    // Calculate magical light position (moves back and forth above mushrooms)
-    float lightTime = glfwGetTime() * 0.8f; // Slower movement
-    float lightX = -5.5f + 4.0f * sin(lightTime); // Oscillates between -9.5f and -1.5f (above mushrooms)
-    float lightY = 8.0f + 1.5f * sin(lightTime * 2.0f); // Slight vertical movement
-    float lightZ = 4.0f + 2.0f * cos(lightTime * 0.6f); // Some depth movement
+    // Calculate magical light position
+    float lightTime = glfwGetTime() * 0.8f;
+    float lightX = -5.5f + 4.0f * sin(lightTime);
+    float lightY = 8.0f + 1.5f * sin(lightTime * 2.0f);
+    float lightZ = 4.0f + 2.0f * cos(lightTime * 0.6f);
     vec3 magicalLightPos = vec3(lightX, lightY, lightZ);
     
-    // Calculate view matrix once for both shaders
+    // Calculate flashlight position
+    vec3 lightOffset = cameraFront * 1.0f + cameraRight * 0.4f + -cameraUp * 0.3f;
+    vec3 flashlightPos = cameraPos + lightOffset;
+    
+    // Calculate view matrix
     glm::mat4 viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    
+    // =========================
+    // 1. SHADOW MAP GENERATION
+    // =========================
+    if (flashlightOn) {
+        glm::mat4 lightSpaceMatrix = getLightSpaceMatrix(flashlightPos, cameraFront);
+        
+        glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+        glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        
+        // Prepare ground matrix for shadow rendering
+        glm::mat4 groundWorldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.01f, 0.0f)) *
+                                      glm::scale(glm::mat4(1.0f), glm::vec3(1000.0f, 0.02f, 1000.0f));
+        
+        // Render scene from light's perspective
+        renderSceneForShadows(lightSpaceMatrix, floorVAO, groundWorldMatrix,
+                             mushroomVAO, mushroomPositions, mushroomScales, 6, mushroomVertices,
+                             plantVAO, plantPositions, plantScales, nbPlants, plantVertices);
+        
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+    
+    // =========================
+    // 2. REGULAR SCENE RENDERING
+    // =========================
+    glViewport(0, 0, 800, 600);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     // ========== RENDER SKYBOX FIRST ==========
     glUseProgram(texturedShaderProgram);
-    
-    // Disable depth writing for skybox
     glDepthMask(GL_FALSE);
     glDepthFunc(GL_LEQUAL);
     
-    // Set up skybox matrices
-    glm::mat4 skyboxViewMatrix = glm::mat4(glm::mat3(viewMatrix)); // Remove translation
+    glm::mat4 skyboxViewMatrix = glm::mat4(glm::mat3(viewMatrix));
     GLuint texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
     glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
     
@@ -1072,11 +1098,10 @@ while(!glfwWindowShouldClose(window))
     glUniformMatrix4fv(texturedViewMatrixLocation, 1, GL_FALSE, &skyboxViewMatrix[0][0]);
     
     GLuint worldMatrixLocation = glGetUniformLocation(texturedShaderProgram, "worldMatrix");
-    glm::vec3 skyboxSize = glm::vec3(5.0f, 5.0f, 5.0f); // Large skybox
+    glm::vec3 skyboxSize = glm::vec3(5.0f, 5.0f, 5.0f);
     glm::mat4 skyboxWorldMatrix = glm::scale(glm::mat4(1.0f), skyboxSize);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &skyboxWorldMatrix[0][0]);
     
-    // Bind skybox texture and draw
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, skyboxTextureID);
     GLuint textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
@@ -1085,105 +1110,86 @@ while(!glfwWindowShouldClose(window))
     glBindVertexArray(skyboxVAO);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     
-    // Re-enable depth writing and reset depth function for regular objects
     glDepthMask(GL_TRUE);
     glDepthFunc(GL_LESS);
     
-    // ========== RENDER REGULAR GEOMETRY ==========
+    // ========== RENDER COLOR GEOMETRY WITH SHADOWS ==========
+    glUseProgram(colorShaderProgramWithShadows);
     
-    // Draw color geometry (ground)
-    glUseProgram(colorShaderProgram);
-
-    // Set spotlight (flashlight) uniforms
-    vec3 lightOffset = cameraFront * 1.0f +     // flashlight points slightly ahead
-                       cameraRight * 0.4f +     // to the right
-                      -cameraUp * 0.3f;        // slightly downward
-    vec3 flashlightPos = cameraPos + lightOffset;
-
-    // Ensure shininess is never zero
-    glUniform1f(glGetUniformLocation(colorShaderProgram, "shininess"), 1.0f);
-
-    glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightPos"), 1, &flashlightPos[0]);
-    glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightDir"), 1, &cameraFront[0]);
-
-    glUniform1f(glGetUniformLocation(colorShaderProgram, "cutOff"), glm::cos(glm::radians(12.5f)));
-    glUniform1f(glGetUniformLocation(colorShaderProgram, "outerCutOff"), glm::cos(glm::radians(17.5f)));
-
-    glUniform3f(glGetUniformLocation(colorShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
+    // Set up shadow uniforms
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glUniform1i(glGetUniformLocation(colorShaderProgramWithShadows, "shadowMap"), 1);
+    glUniform1i(glGetUniformLocation(colorShaderProgramWithShadows, "enableShadows"), flashlightOn ? 1 : 0);
+    
     if (flashlightOn) {
-        glUniform3f(glGetUniformLocation(colorShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
-        glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
-    } else {
-        glUniform3f(glGetUniformLocation(colorShaderProgram, "lightDiffuse"), 0.0f, 0.0f, 0.0f);
-        glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 0.0f, 0.0f, 0.0f);
+        glm::mat4 lightSpaceMatrix = getLightSpaceMatrix(flashlightPos, cameraFront);
+        glUniformMatrix4fv(glGetUniformLocation(colorShaderProgramWithShadows, "lightSpaceMatrix"), 1, GL_FALSE, &lightSpaceMatrix[0][0]);
     }
-
-  // Set magical light with safer values
-    glUniform3fv(glGetUniformLocation(colorShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
-    glUniform3f(glGetUniformLocation(colorShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
-    glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightIntensity"), 20.0f); // Increased
-    glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightRadius"), 30.0f);   // Increased
-
-    // Send fog uniforms to color shader
-    GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
-    GLuint fogStartLoc = glGetUniformLocation(colorShaderProgram, "fogStart");
-    GLuint fogEndLoc = glGetUniformLocation(colorShaderProgram, "fogEnd");
-    GLuint camPosLoc = glGetUniformLocation(colorShaderProgram, "cameraPos");
-
+    
+    // Set flashlight uniforms
+    glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "shininess"), 1.0f);
+    glUniform3fv(glGetUniformLocation(colorShaderProgramWithShadows, "lightPos"), 1, &flashlightPos[0]);
+    glUniform3fv(glGetUniformLocation(colorShaderProgramWithShadows, "lightDir"), 1, &cameraFront[0]);
+    glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "cutOff"), glm::cos(glm::radians(12.5f)));
+    glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "outerCutOff"), glm::cos(glm::radians(17.5f)));
+    glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "lightAmbient"), 0.1f, 0.1f, 0.1f);
+    
+    if (flashlightOn) {
+        glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
+        glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "lightSpecular"), 1.0f, 1.0f, 1.0f);
+    } else {
+        glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "lightDiffuse"), 0.0f, 0.0f, 0.0f);
+        glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "lightSpecular"), 0.0f, 0.0f, 0.0f);
+    }
+    
+    // Set magical light uniforms
+    glUniform3fv(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightPos"), 1, &magicalLightPos[0]);
+    glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
+    glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightIntensity"), 20.0f);
+    glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightRadius"), 30.0f);
+    
+    // Set fog uniforms
+    GLuint fogColorLoc = glGetUniformLocation(colorShaderProgramWithShadows, "fogColor");
+    GLuint fogStartLoc = glGetUniformLocation(colorShaderProgramWithShadows, "fogStart");
+    GLuint fogEndLoc = glGetUniformLocation(colorShaderProgramWithShadows, "fogEnd");
+    GLuint camPosLoc = glGetUniformLocation(colorShaderProgramWithShadows, "cameraPos");
+    
     glUniform3fv(fogColorLoc, 1, &fogColor[0]);
     glUniform1f(fogStartLoc, fogStart);
     glUniform1f(fogEndLoc, fogEnd);
     glUniform3fv(camPosLoc, 1, &cameraPos[0]);
-
-    //Set projection matrix for color shader:
-    GLuint projectionMatrixLocation = glGetUniformLocation(colorShaderProgram, "projectionMatrix");
+    
+    // Set projection and view matrices
+    GLuint projectionMatrixLocation = glGetUniformLocation(colorShaderProgramWithShadows, "projectionMatrix");
     glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
-
-    GLuint viewMatrixLocation = glGetUniformLocation(colorShaderProgram, "viewMatrix");
+    
+    GLuint viewMatrixLocation = glGetUniformLocation(colorShaderProgramWithShadows, "viewMatrix");
     glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
-
-    // create rotation matrix around y axis and bind to vertex shader
-    worldMatrixLocation = glGetUniformLocation(colorShaderProgram, "worldMatrix");
-    GLuint alphaLocation = glGetUniformLocation(colorShaderProgram, "alpha");
-
+    
+    worldMatrixLocation = glGetUniformLocation(colorShaderProgramWithShadows, "worldMatrix");
+    GLuint alphaLocation = glGetUniformLocation(colorShaderProgramWithShadows, "alpha");
+    
     // Draw ground
     glUniform1f(alphaLocation, 1.0f);
     glm::mat4 groundWorldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.01f, 0.0f)) *
                                   glm::scale(glm::mat4(1.0f), glm::vec3(1000.0f, 0.02f, 1000.0f));
-
+    
     glBindVertexArray(floorVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-
-    // Draw magical light orb
-    /* glUniform1f(alphaLocation, 0.8f);
-    float orbPulse = 0.3f + 0.2f * sin(glfwGetTime() * 3.0f); // Pulsing scale
-    glm::mat4 orbMatrix = glm::translate(glm::mat4(1.0f), magicalLightPos) *
-                          glm::scale(glm::mat4(1.0f), glm::vec3(orbPulse, orbPulse, orbPulse));
+    glDrawArrays(GL_TRIANGLES, 0, 6);
     
-    glBindVertexArray(lightOrbVAO);
-    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &orbMatrix[0][0]);
-    glDrawArrays(GL_TRIANGLES, 0, 24); // 8 triangles * 3 vertices each */
-
-    // Draw textured geometry
+    // ========== RENDER TEXTURED GEOMETRY ==========
     glUseProgram(texturedShaderProgram);
-
-    // Send fog uniforms to textured shader
-    fogColorLoc = glGetUniformLocation(texturedShaderProgram, "fogColor");
-    fogStartLoc = glGetUniformLocation(texturedShaderProgram, "fogStart");
-    fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
-    camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
-
-    // Enhanced ambient for textured objects
+    
+    // Set all the uniforms for textured shader (same as before)
     glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.25f, 0.25f, 0.3f);
-
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightPos"), 1, &flashlightPos[0]);
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightDir"), 1, &cameraFront[0]);
-
     glUniform1f(glGetUniformLocation(texturedShaderProgram, "cutOff"), glm::cos(glm::radians(12.5f)));
     glUniform1f(glGetUniformLocation(texturedShaderProgram, "outerCutOff"), glm::cos(glm::radians(17.5f)));
-
     glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.1f, 0.1f, 0.1f);
+    
     if (flashlightOn) {
         glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightDiffuse"), 0.8f, 0.8f, 0.8f);
         glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightSpecular"), 1.0f, 1.0f, 1.0f);
@@ -1193,64 +1199,63 @@ while(!glfwWindowShouldClose(window))
         glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightSpecular"), 0.0f, 0.0f, 0.0f);
         glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.0f);
     }
-    glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 80.0f); // increased value 1 -> 80
-
-    // Set magical light uniforms for textured shader
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 80.0f);
+    
+    // Set magical light uniforms
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
-    glUniform3f(glGetUniformLocation(texturedShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f); // Light pink
+    glUniform3f(glGetUniformLocation(texturedShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
     glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightIntensity"), 25.0f);
     glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightRadius"), 35.0f);
-
-    // 🔧 KEY CUSTOMIZATION PARAMETERS:
-    //glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.5f);  // LOWER = more transparent
-    glUniform3f(glGetUniformLocation(texturedShaderProgram, "flashlightColor"), 1.0f, 1.0f, 0.6f); // LIGHT YELLOW
-    glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 30.0f); // HIGHER = smoother edges
-
+    
+    glUniform3f(glGetUniformLocation(texturedShaderProgram, "flashlightColor"), 1.0f, 1.0f, 0.6f);
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 30.0f);
+    
+    // Set fog uniforms
+    fogColorLoc = glGetUniformLocation(texturedShaderProgram, "fogColor");
+    fogStartLoc = glGetUniformLocation(texturedShaderProgram, "fogStart");
+    fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
+    camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
+    
     glUniform3fv(fogColorLoc, 1, &fogColor[0]);
     glUniform1f(fogStartLoc, fogStart);
     glUniform1f(fogEndLoc, fogEnd);
     glUniform3fv(camPosLoc, 1, &cameraPos[0]);
-
-    //Set projection matrix for textured shader:
+    
+    // Set projection and view matrices
     texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
     glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
-
-    // Set view matrix for textured shader too (regular view matrix, not skybox view matrix)
+    
     texturedViewMatrixLocation = glGetUniformLocation(texturedShaderProgram, "viewMatrix");
     glUniformMatrix4fv(texturedViewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
-
-    // Get world matrix location for textured shader
+    
     worldMatrixLocation = glGetUniformLocation(texturedShaderProgram, "worldMatrix");
-
+    
     glActiveTexture(GL_TEXTURE0);
     textureLocation = glGetUniformLocation(texturedShaderProgram, "textureSampler");
-
-    // Draw mushroom planes
+    
+    // Draw mushrooms
     glBindVertexArray(mushroomVAO);
-
     for (int i = 0; i < 6; ++i) {
-       // glBindTexture(GL_TEXTURE_2D, mushroomTextureIDs[i]);
         glBindTexture(GL_TEXTURE_2D, mushroomTextureID);
-        glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * glm::scale(glm::mat4(1.0f), mushroomScales[i]);
+        glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * 
+                                   glm::scale(glm::mat4(1.0f), mushroomScales[i]);
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
-
         glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
     }
-
-    // draw 3d plants
+    
+    // Draw 3D plants
     glBindVertexArray(plantVAO);
     glBindTexture(GL_TEXTURE_2D, plantTextureID);
-
     for(int i = 0; i < nbPlants; i++){
         mat4 plantMatrix = translate(mat4(1.0f), plantPositions[i]) * scale(mat4(1.0f), plantScales[i]);
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
         glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
     }
-
-    // draw special plants
+    
+    // Draw special plants
     glBindVertexArray(specialPlantVAO);
     glBindTexture(GL_TEXTURE_2D, specialPlantTextureID);
-
+    
     if(!specialPlant1Collected){
         mat4 specialPlant1Matrix = translate(mat4(1.0f), specialPlantPosition1) * scale(mat4(1.0f), vec3(2.0f, 4.0f, 2.0f));
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant1Matrix[0][0]);
@@ -1261,119 +1266,106 @@ while(!glfwWindowShouldClose(window))
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant2Matrix[0][0]);
         glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
     }
-
     if(!specialPlant3Collected){
         mat4 specialPlant3Matrix = translate(mat4(1.0f), specialPlantPosition3) * scale(mat4(1.0f), vec3(2.0f, 4.0f, 2.0f));
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant3Matrix[0][0]);
         glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
     }
-
-    // checking whether the player is in contact with any of the special plants
     
+    // Collection logic
     if(distance(cameraPos, specialPlantPosition1) <= 2){
         specialPlant1Collected = true;
     }
-
     if(distance(cameraPos, specialPlantPosition2) <= 2){
         specialPlant2Collected = true;
     }
     if(distance(cameraPos, specialPlantPosition3) <= 2){
         specialPlant3Collected = true;
     }
-
-    // Define the stem offset relative to flower center
+    
+    // Draw flower and dragonfly (same as before)
     glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
-
-    // Convert rotation angle from degrees to radians
     float angleRadians = glm::radians(angle);
-
-    // Build plant matrix with pivot at stem
+    
     glm::mat4 plantMatrix =
-        glm::translate(glm::mat4(1.0f), flowerPosition) *     // Move to flower world position
-        glm::translate(glm::mat4(1.0f), stemOffset) *          // Move pivot to stem
-        glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *  // Rotate around stem
-        glm::translate(glm::mat4(1.0f), -stemOffset)* glm::scale(mat4(1.0f), vec3(2,2,2));          // Move pivot back
-
+        glm::translate(glm::mat4(1.0f), flowerPosition) *
+        glm::translate(glm::mat4(1.0f), stemOffset) *
+        glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *
+        glm::translate(glm::mat4(1.0f), -stemOffset) * 
+        glm::scale(mat4(1.0f), vec3(2,2,2));
+    
     // Draw flower
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, flowerTextureID);
     glUniform1i(textureLocation, 0);
-
+    
     glBindVertexArray(flowerPlaneVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    // Draw dragonfly body relative to flower
+    
+    // Draw dragonfly body
     glm::mat4 dragonflyLocalMatrix = glm::translate(glm::mat4(1.0f), dragonflyPosition - flowerPosition);
     glm::mat4 dragonflyWorldMatrix = plantMatrix * dragonflyLocalMatrix;
-
+    
     glBindTexture(GL_TEXTURE_2D, dragonflyBodyTextureID);
     glBindVertexArray(dragonflyPlaneVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    // Draw dragonfly wings relative to flower
-
-    // --- Animate front wing flapping ---
-
-    float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // only flaps outward
+    
+    // Draw dragonfly wings with animation
+    float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));
     glm::vec3 wingOffsetFront = wingPositionFront - flowerPosition;
-
+    
     glm::mat4 wingFrontLocalMatrix =
-    glm::translate(glm::mat4(1.0f), wingOffsetFront) *                      // move to local space
-    glm::rotate(glm::mat4(1.0f), glm::radians(flapAngle), glm::vec3(1, 0, 0));  // flap around X axis
-
+        glm::translate(glm::mat4(1.0f), wingOffsetFront) *
+        glm::rotate(glm::mat4(1.0f), glm::radians(flapAngle), glm::vec3(1, 0, 0));
+    
     glm::mat4 wingFrontWorldMatrix = plantMatrix * wingFrontLocalMatrix;
-
+    
     glBindTexture(GL_TEXTURE_2D, wingTextureID);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingFrontWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    // --- Animate back wing flapping ---
-
-    float flapAngleBack = -12.0f * glm::abs(sin(glfwGetTime() * 2.0f));  // flap back wing downward only
+    
+    // Back wing
+    float flapAngleBack = -12.0f * glm::abs(sin(glfwGetTime() * 2.0f));
     glm::vec3 wingOffsetBack = wingPositionBack - flowerPosition;
-
+    
     glm::mat4 wingBackLocalMatrix =
-    glm::translate(glm::mat4(1.0f), wingOffsetBack) *
-    glm::rotate(glm::mat4(1.0f), glm::radians(flapAngleBack), glm::vec3(1, 0, 0));  // flap around X axis
-
+        glm::translate(glm::mat4(1.0f), wingOffsetBack) *
+        glm::rotate(glm::mat4(1.0f), glm::radians(flapAngleBack), glm::vec3(1, 0, 0));
+    
     glm::mat4 wingBackWorldMatrix = plantMatrix * wingBackLocalMatrix;
-
+    
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingBackWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
+    
     glfwSwapBuffers(window);
     glfwPollEvents();
     
-    // Handle inputs
-
-    // escape
+    // Handle inputs (same as before)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-
-    // F for flashlight
+    
     if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
         if (!fKeyPressed) {
-            flashlightOn = !flashlightOn;  // toggle flashlight
+            flashlightOn = !flashlightOn;
             fKeyPressed = true;
         }
     }
     else {
         fKeyPressed = false;
     }
-
-    float cameraSpeed = 2.5 * deltaTime; // adjust accordingly
-
-    // camera movement
+    
+    float cameraSpeed = 2.5 * deltaTime;
+    
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-    cameraPos += cameraSpeed * cameraFront;
+        cameraPos += cameraSpeed * cameraFront;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-    cameraPos -= cameraSpeed * cameraFront;
+        cameraPos -= cameraSpeed * cameraFront;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-    cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-    cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 }
     
     // Shutdown GLFW
