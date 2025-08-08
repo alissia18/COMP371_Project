@@ -95,15 +95,15 @@ const char* getFragmentShaderSource()
     return
     "#version 330 core\n"
     "in vec3 vertexColor;"
-    "in vec3 FragPos;" // 💨 from vertex shader: world position of the fragment
+    "in vec3 FragPos;"
     "in vec3 Normal;"
     "out vec4 FragColor;"
     ""
     "uniform float alpha;"
-    "uniform vec3 cameraPos;"       // 💨 to calculate distance to camera
-    "uniform vec3 fogColor;"        // 💨 color of the fog (e.g., swampy green)
-    "uniform float fogStart;"       // 💨 where fog starts (distance)
-    "uniform float fogEnd;"         // 💨 where fog is fully opaque"
+    "uniform vec3 cameraPos;"
+    "uniform vec3 fogColor;"
+    "uniform float fogStart;"
+    "uniform float fogEnd;"
     // Flashlight uniforms
     "uniform vec3 lightPos;"
     "uniform vec3 lightDir;"
@@ -121,52 +121,58 @@ const char* getFragmentShaderSource()
     ""
     "void main()"
     "{"
-    "    vec3 norm = normalize(Normal);"    // Normalize input normal
+    "    vec3 norm = normalize(Normal);"
+    ""
+    // ENHANCED BASE AMBIENT - This ensures objects are never completely black
+    "    vec3 globalAmbient = vec3(0.2, 0.2, 0.25);" // Slightly blue ambient light
+    "    vec3 baseColor = vertexColor * globalAmbient;"
     ""
     // Flashlight calculations
-    "    vec3 lightDirection = normalize(lightPos - FragPos);"    // Calculate light direction vector from fragment to light source
-    "    float theta = dot(lightDirection, normalize(-lightDir));"    // Calculate spotlight intensity (using cutoff)
-    "    float epsilon = cutOff - outerCutOff;"
+    "    vec3 lightDirection = normalize(lightPos - FragPos);"
+    "    float theta = dot(lightDirection, normalize(-lightDir));"
+    "    float epsilon = max(cutOff - outerCutOff, 0.001);" // Prevent division by zero
     "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
     ""
-    "    vec3 ambient = lightAmbient * vertexColor;"    // Ambient component
-    "    float diff = max(dot(norm, lightDirection), 0.0);"     // Diffuse component
+    // Enhanced flashlight lighting with minimum ambient
+    "    vec3 ambient = max(lightAmbient, vec3(0.1)) * vertexColor;" // Ensure minimum ambient
+    "    float diff = max(dot(norm, lightDirection), 0.0);"
     "    vec3 diffuse = lightDiffuse * diff * vertexColor;"
-    "    vec3 viewDir = normalize(cameraPos - FragPos);"    // Specular component (view direction, reflect direction)
+    "    vec3 viewDir = normalize(cameraPos - FragPos);"
     "    vec3 reflectDir = reflect(-lightDirection, norm);"
-    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);"
+    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));" // Prevent shininess issues
     "    vec3 specular = lightSpecular * spec;"
-    "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"    // Combine lighting components with spotlight intensity
+    "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"
     ""
-    // 🔧 FIXED MAGICAL LIGHT CALCULATIONS WITH FEATHERED EDGES
+    // IMPROVED MAGICAL LIGHT CALCULATIONS
     "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);"
     "    float magicalDistance = length(magicalLightPos - FragPos);"
     ""
-    // Create feathered edges for magical light
-    "    float magicalAttenuation = magicalLightIntensity / (1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance);"
-    "    float magicalFalloff = 1.0 - smoothstep(0.0, magicalLightRadius, magicalDistance);" // Smooth falloff
-    "    magicalFalloff = pow(magicalFalloff, 2.0);" // Feathered edges
+    // Better attenuation with safeguards
+    "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);"
+    "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);"
+    "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);"
     "    magicalAttenuation *= magicalFalloff;"
-    "    "
+    ""
     "    float magicalDiff = max(dot(norm, magicalLightDir), 0.0);"
     "    vec3 magicalDiffuse = magicalLightColor * magicalDiff * vertexColor * magicalAttenuation;"
     ""
     "    vec3 magicalReflectDir = reflect(-magicalLightDir, norm);"
-    "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), shininess * 0.5);" // Softer specular
-    "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.3;" // Reduced specular intensity
+    "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.5, 1.0));"
+    "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.3;"
     ""
     "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;"
     ""
-    // Combine all lighting
-    "    vec3 baseColor = vertexColor;"
-    "    vec3 litColor = baseColor + intensity * lightDiffuse * vec3(1.0, 1.0, 0.6);"  // warm yellow flashlight
-    "    litColor += magicalLighting;" // Add magical light contribution
-    "    litColor = clamp(litColor, 0.0, 1.0);"
-    "    "
-    "    float distance = length(cameraPos - FragPos);"      // distance to camera"
-    "    float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);" // 1 = no fog, 0 = full fog
-    "    vec3 finalColor = clamp(mix(fogColor, litColor, fogFactor), 0.0, 1.0);" // blend fog with original color
-    "    FragColor = vec4(finalColor, alpha);"
+    // COMBINE ALL LIGHTING WITH PROPER BASE
+    "    vec3 litColor = baseColor + flashlightLighting + magicalLighting;"
+    "    litColor = clamp(litColor, vec3(0.0), vec3(1.0));"
+    ""
+    // Apply fog with safeguards
+    "    float distance = length(cameraPos - FragPos);"
+    "    float fogRange = max(fogEnd - fogStart, 0.1);" // Prevent division by zero
+    "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);"
+    "    vec3 finalColor = mix(fogColor, litColor, fogFactor);"
+    "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));"
+    "    FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));"
     "}";
 }
 
@@ -218,7 +224,7 @@ const char* getTexturedFragmentShaderSource()
     "uniform float fogStart;"
     "uniform float fogEnd;"
     ""
-    // Spotlight uniforms (same as color shader)
+    // Spotlight uniforms
     "uniform vec3 lightPos;"
     "uniform vec3 lightDir;"
     "uniform float cutOff;"
@@ -234,10 +240,10 @@ const char* getTexturedFragmentShaderSource()
     "uniform float magicalLightIntensity;"
     "uniform float magicalLightRadius;"
     ""
-    // KEY PARAMETERS FOR CUSTOMIZATION:
-    "uniform float lightOpacity = 0.8;"        // OPACITY: Lower = more transparent light
-    "uniform vec3 flashlightColor = vec3(1.0, 1.0, 0.6);" // COLOR: Yellow flashlight
-    "uniform float falloffSmoothness = 2.0;"   // FALLOFF: Higher = smoother edges
+    // Customization parameters with defaults
+    "uniform float lightOpacity = 0.8;"
+    "uniform vec3 flashlightColor = vec3(1.0, 1.0, 0.6);"
+    "uniform float falloffSmoothness = 2.0;"
     ""
     "out vec4 FragColor;"
     ""
@@ -246,18 +252,22 @@ const char* getTexturedFragmentShaderSource()
     "   vec4 textureColor = texture(textureSampler, vertexUV);"
     "   if(textureColor.a < 0.5) discard;"
     ""
-    // Lighting calculations (copied from color shader)
+    // ENHANCED BASE AMBIENT for textured objects
+    "   vec3 globalAmbient = vec3(0.25, 0.25, 0.3);" // Slightly brighter for textured objects
+    "   vec3 baseColor = textureColor.rgb * globalAmbient;"
+    ""
+    // Lighting calculations
     "   vec3 norm = normalize(Normal);"
     "   vec3 lightDirection = normalize(lightPos - FragPos);"
     "   float theta = dot(lightDirection, normalize(-lightDir));"
     ""
     // Enhanced spotlight falloff with smoothness parameter
-    "   float epsilon = cutOff - outerCutOff;"
+    "   float epsilon = max(cutOff - outerCutOff, 0.001);" // Prevent division by zero
     "   float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
-    "   intensity = pow(intensity, falloffSmoothness);" // Apply smoothness
+    "   intensity = pow(intensity, max(falloffSmoothness, 0.1));" // Safeguard smoothness
     ""
-    // Ambient lighting
-    "   vec3 ambient = lightAmbient * textureColor.rgb;"
+    // Ambient lighting - ensure it's never zero
+    "   vec3 ambient = max(lightAmbient, vec3(0.15)) * textureColor.rgb;"
     ""
     // Diffuse lighting
     "   float diff = max(dot(norm, lightDirection), 0.0);"
@@ -266,42 +276,43 @@ const char* getTexturedFragmentShaderSource()
     // Specular lighting
     "   vec3 viewDir = normalize(cameraPos - FragPos);"
     "   vec3 reflectDir = reflect(-lightDirection, norm);"
-    "   float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);"
+    "   float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));" // Prevent shininess issues
     "   vec3 specular = lightSpecular * spec;"
     ""
     // Flashlight contribution
     "   vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"
-    "   vec3 baseColor = textureColor.rgb;"
-    "   vec3 lightContribution = intensity * lightDiffuse * flashlightColor * lightOpacity;"
+    "   vec3 lightContribution = intensity * lightDiffuse * flashlightColor * clamp(lightOpacity, 0.0, 1.0);"
     ""
-    // 🔧 FIXED MAGICAL LIGHT CALCULATIONS WITH FEATHERED EDGES
+    // IMPROVED MAGICAL LIGHT CALCULATIONS
     "   vec3 magicalLightDir = normalize(magicalLightPos - FragPos);"
     "   float magicalDistance = length(magicalLightPos - FragPos);"
     ""
-    // Create feathered edges for magical light (similar to flashlight falloff)
-    "   float magicalAttenuation = magicalLightIntensity / (1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance);"
-    "   float magicalFalloff = 1.0 - smoothstep(0.0, magicalLightRadius, magicalDistance);" // Smooth falloff
-    "   magicalFalloff = pow(magicalFalloff, 2.0);" // Feathered edges (adjust power for softer/harder edges)
+    // Better attenuation with safeguards
+    "   float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);"
+    "   float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);"
+    "   magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);"
     "   magicalAttenuation *= magicalFalloff;"
     ""
     "   float magicalDiff = max(dot(norm, magicalLightDir), 0.0);"
     "   vec3 magicalDiffuse = magicalLightColor * magicalDiff * textureColor.rgb * magicalAttenuation;"
     ""
     "   vec3 magicalReflectDir = reflect(-magicalLightDir, norm);"
-    "   float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), shininess * 0.3);"
+    "   float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.3, 1.0));"
     "   vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.2;"
     ""
     "   vec3 magicalLighting = magicalDiffuse + magicalSpecular;"
     ""
-    // Combine all lighting
-    "   vec3 litColor = baseColor + lightContribution + magicalLighting;" // 🔧 FIXED: Now properly adds magical lighting
-    "   litColor = clamp(litColor, 0.0, 1.0);"
+    // COMBINE ALL LIGHTING WITH PROPER BASE
+    "   vec3 litColor = baseColor + flashlightLighting + lightContribution + magicalLighting;"
+    "   litColor = clamp(litColor, vec3(0.0), vec3(1.0));"
     ""
-    // Apply fog
+    // Apply fog with safeguards
     "   float distance = length(cameraPos - FragPos);"
-    "   float fogFactor = clamp((fogEnd - distance) / (fogEnd - fogStart), 0.0, 1.0);"
-    "   vec3 finalColor = clamp(mix(fogColor, litColor, fogFactor), 0.0, 1.0);"
-    "   FragColor = vec4(finalColor, alpha);"
+    "   float fogRange = max(fogEnd - fogStart, 0.1);" // Prevent division by zero
+    "   float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);"
+    "   vec3 finalColor = mix(fogColor, litColor, fogFactor);"
+    "   finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));"
+    "   FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));"
     "}";
 }
 
@@ -800,9 +811,9 @@ int main(int argc, char*argv[])
     // Entering Main Loop
 while(!glfwWindowShouldClose(window))
 {
-    glm::vec3 fogColor = glm::vec3(0.165f, 0.337f, 0.506f); // cool bluish-gray
-    float fogStart = 2.5f;  // start fading
-    float fogEnd = 15.0f;   // full fog beyond this
+    glm::vec3 fogColor = glm::vec3(0.15f, 0.25f, 0.4f); // Lighter fog color
+    float fogStart = 2.5f;   // Moved further back
+    float fogEnd = 15.0f;    // Increased range
 
     // Each frame, reset color of each pixel to glClearColor
     // Add the GL_DEPTH_BUFFER_BIT to glClear
@@ -870,6 +881,9 @@ while(!glfwWindowShouldClose(window))
                       -cameraUp * 0.3f;        // slightly downward
     vec3 flashlightPos = cameraPos + lightOffset;
 
+    // Ensure shininess is never zero
+    glUniform1f(glGetUniformLocation(colorShaderProgram, "shininess"), 1.0f);
+
     glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightPos"), 1, &flashlightPos[0]);
     glUniform3fv(glGetUniformLocation(colorShaderProgram, "lightDir"), 1, &cameraFront[0]);
 
@@ -885,11 +899,11 @@ while(!glfwWindowShouldClose(window))
         glUniform3f(glGetUniformLocation(colorShaderProgram, "lightSpecular"), 0.0f, 0.0f, 0.0f);
     }
 
-    // Set magical light uniforms for color shader
-    glUniform3fv(glGetUniformLocation(colorShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
-    glUniform3f(glGetUniformLocation(colorShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f); // Light pink
-    glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightIntensity"), 15.0f);
-    glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightRadius"), 25.0f);
+  // Set magical light with safer values
+glUniform3fv(glGetUniformLocation(colorShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
+glUniform3f(glGetUniformLocation(colorShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
+glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightIntensity"), 20.0f); // Increased
+glUniform1f(glGetUniformLocation(colorShaderProgram, "magicalLightRadius"), 30.0f);   // Increased
 
     // Send fog uniforms to color shader
     GLuint fogColorLoc = glGetUniformLocation(colorShaderProgram, "fogColor");
@@ -941,6 +955,9 @@ while(!glfwWindowShouldClose(window))
     fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
     camPosLoc = glGetUniformLocation(texturedShaderProgram, "cameraPos");
 
+    // Enhanced ambient for textured objects
+glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.25f, 0.25f, 0.3f);
+
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightPos"), 1, &flashlightPos[0]);
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightDir"), 1, &cameraFront[0]);
 
@@ -957,7 +974,7 @@ while(!glfwWindowShouldClose(window))
         glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightSpecular"), 0.0f, 0.0f, 0.0f);
         glUniform1f(glGetUniformLocation(texturedShaderProgram, "lightOpacity"), 0.0f);
     }
-    glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 32.0f);
+    glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 1.0f);
 
     // Set magical light uniforms for textured shader
     glUniform3fv(glGetUniformLocation(texturedShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
