@@ -51,6 +51,9 @@ using namespace std;
 // flashlight variables
 bool flashlightOn = true;
 bool fKeyPressed = false;
+// Magical light variable
+bool magicalLightOn = true;
+bool mKeyPressed = false;
 
 // camera movement
 vec3 cameraPos   = vec3(0.0f, 1.0f,  10.0f);
@@ -1053,7 +1056,7 @@ while(!glfwWindowShouldClose(window))
     vec3 magicalLightPos = vec3(lightX, lightY, lightZ);
     
     // Calculate flashlight position
-    vec3 lightOffset = cameraFront * 1.0f + cameraRight * 0.4f + -cameraUp * 0.3f;
+    vec3 lightOffset = cameraFront * 1.0f + cameraRight * 0.8f + -cameraUp * 0.3f;
     vec3 flashlightPos = cameraPos + lightOffset;
     
     // Calculate view matrix
@@ -1147,10 +1150,16 @@ while(!glfwWindowShouldClose(window))
     }
     
     // Set magical light uniforms
-    glUniform3fv(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightPos"), 1, &magicalLightPos[0]);
-    glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
-    glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightIntensity"), 20.0f);
-    glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightRadius"), 30.0f);
+    if (magicalLightOn) {
+        glUniform3fv(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightPos"), 1, &magicalLightPos[0]);
+        glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
+        glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightIntensity"), 20.0f);
+        glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightRadius"), 30.0f);
+    } else {
+        // Turn the light off by setting its intensity and color to 0
+        glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightColor"), 0.0f, 0.0f, 0.0f);
+        glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightIntensity"), 0.0f);
+    }
     
     // Set fog uniforms
     GLuint fogColorLoc = glGetUniformLocation(colorShaderProgramWithShadows, "fogColor");
@@ -1205,10 +1214,16 @@ while(!glfwWindowShouldClose(window))
     glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 80.0f);
     
     // Set magical light uniforms
-    glUniform3fv(glGetUniformLocation(texturedShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
-    glUniform3f(glGetUniformLocation(texturedShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
-    glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightIntensity"), 25.0f);
-    glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightRadius"), 35.0f);
+    if (magicalLightOn) {
+        glUniform3fv(glGetUniformLocation(texturedShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
+        glUniform3f(glGetUniformLocation(texturedShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
+        glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightIntensity"), 25.0f);
+        glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightRadius"), 35.0f);
+    } else {
+        // Turn the light off by setting its intensity and color to 0
+        glUniform3f(glGetUniformLocation(texturedShaderProgram, "magicalLightColor"), 0.0f, 0.0f, 0.0f);
+        glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightIntensity"), 0.0f);
+    }
     
     glUniform3f(glGetUniformLocation(texturedShaderProgram, "flashlightColor"), 1.0f, 1.0f, 0.6f);
     glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 30.0f);
@@ -1357,6 +1372,15 @@ while(!glfwWindowShouldClose(window))
     }
     else {
         fKeyPressed = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS) {
+        if (!mKeyPressed) {
+            magicalLightOn = !magicalLightOn;
+            mKeyPressed = true;
+        }
+    }
+    else {
+        mKeyPressed = false;
     }
     
     float cameraSpeed = 2.5 * deltaTime;
