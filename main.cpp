@@ -43,7 +43,8 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
                            GLuint plantVAO, glm::vec3* plantPositions, glm::vec3* plantScales,
                            int plantCount, int plantVertices,
                            GLuint specialPlantVAO, glm::vec3 specialPlantPosition1, glm::vec3 specialPlantPosition2,
-                           glm::vec3 specialPlantPosition3, int specialPlantVertices);
+                           glm::vec3 specialPlantPosition3, int specialPlantVertices,
+                           bool specialPlant1Collected, bool specialPlant2Collected, bool specialPlant3Collected);
 
 using namespace glm;
 using namespace std;
@@ -141,7 +142,6 @@ const char* getFragmentShaderSource()
     "{"
     "    vec3 norm = normalize(Normal);"
     ""
-    // ENHANCED BASE AMBIENT - This ensures objects are never completely black
     "    vec3 globalAmbient = vec3(0.2, 0.2, 0.25);" // Slightly blue ambient light
     "    vec3 baseColor = vertexColor * globalAmbient;"
     ""
@@ -161,11 +161,11 @@ const char* getFragmentShaderSource()
     "    vec3 specular = lightSpecular * spec;"
     "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"
     ""
-    // IMPROVED MAGICAL LIGHT CALCULATIONS
+    // Magical Light Calculations
     "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);"
     "    float magicalDistance = length(magicalLightPos - FragPos);"
     ""
-    // Better attenuation with safeguards
+    // Attenuation
     "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);"
     "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);"
     "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);"
@@ -180,11 +180,11 @@ const char* getFragmentShaderSource()
     ""
     "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;"
     ""
-    // COMBINE ALL LIGHTING WITH PROPER BASE
+    // Combine all lighting
     "    vec3 litColor = baseColor + flashlightLighting + magicalLighting;"
     "    litColor = clamp(litColor, vec3(0.0), vec3(1.0));"
     ""
-    // Apply fog with safeguards
+    // Apply fog
     "    float distance = length(cameraPos - FragPos);"
     "    float fogRange = max(fogEnd - fogStart, 0.1);" // Prevent division by zero
     "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);"
@@ -374,12 +374,12 @@ const char* getVertexShaderSourceWithShadows()
     "uniform mat4 worldMatrix;\n"
     "uniform mat4 viewMatrix = mat4(1.0);\n"
     "uniform mat4 projectionMatrix = mat4(1.0);\n"
-    "uniform mat4 lightSpaceMatrix;\n"  // NEW: for shadow mapping
+    "uniform mat4 lightSpaceMatrix;\n"  // for shadow mapping
     "\n"
     "out vec3 vertexColor;\n"
     "out vec3 FragPos;\n"
     "out vec3 Normal;\n"
-    "out vec4 FragPosLightSpace;\n"  // NEW: for shadow mapping
+    "out vec4 FragPosLightSpace;\n"  // for shadow mapping
     "\n"
     "void main()\n"
     "{\n"
@@ -387,7 +387,7 @@ const char* getVertexShaderSourceWithShadows()
     "    vec4 worldPos = worldMatrix * vec4(aPos, 1.0);\n"
     "    FragPos = worldPos.xyz;\n"
     "    Normal = mat3(transpose(inverse(worldMatrix))) * aNormal;\n"
-    "    FragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);\n"  // NEW
+    "    FragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);\n"
     "    mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;\n"
     "    gl_Position = modelViewProjection * vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
     "}\n";
@@ -423,7 +423,7 @@ const char* getFragmentShaderSourceWithShadows()
         "uniform vec3 magicalLightColor;\n"
         "uniform float magicalLightIntensity;\n"
         "uniform float magicalLightRadius;\n"
-        // NEW: Shadow uniforms
+        // Shadow uniforms
         "uniform sampler2D shadowMap;\n"
         "uniform bool enableShadows;\n"
         "\n"
@@ -444,11 +444,9 @@ const char* getFragmentShaderSourceWithShadows()
         "    // Get depth of current fragment from light's perspective\n"
         "    float currentDepth = projCoords.z;\n"
         "\n"
-        "    // Calculate bias to prevent shadow acne\n"
         "    float bias = max(0.05 * (1.0 - dot(normal, lightDirection)), 0.005);\n"
         "\n"
         "    // Check whether current frag pos is in shadow\n"
-        "    // PCF (Percentage-closer filtering) for softer shadows\n"
         "    float shadow = 0.0;\n"
         "    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);\n"
         "    for(int x = -1; x <= 1; ++x)\n"
@@ -487,7 +485,7 @@ const char* getFragmentShaderSourceWithShadows()
         "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));\n" // Prevent shininess issues
         "    vec3 specular = lightSpecular * spec;\n"
         "\n"
-        "    // NEW: Calculate shadow factor and apply to lighting\n"
+        "    // Calculate shadow factor and apply to lighting\n"
         "    float shadow = 0.0;\n"
         "    if(enableShadows && intensity > 0.0)\n"
         "    {\n"
@@ -979,7 +977,7 @@ int main(int argc, char*argv[])
     int flowerPlaneVAO = createTexturedVertexArrayObject(flowerPlane, sizeof(flowerPlane));
     int dragonflyPlaneVAO = createTexturedVertexArrayObject(dragonflyPlane, sizeof(dragonflyPlane));
     int skyboxVAO = createTexturedVertexArrayObject(skyboxCube, sizeof(skyboxCube));
-    int lightOrbVAO = createVertexArrayObject(lightOrbVertices, sizeof(lightOrbVertices)); // New magical light orb
+    int lightOrbVAO = createVertexArrayObject(lightOrbVertices, sizeof(lightOrbVertices)); // magical light orb
 
     // mushroom scale values
 
@@ -1080,7 +1078,8 @@ while(!glfwWindowShouldClose(window))
         renderSceneForShadows(lightSpaceMatrix, floorVAO, groundWorldMatrix,
                               mushroomVAO, mushroomPositions, mushroomScales, 6, mushroomVertices,
                               plantVAO, plantPositions, plantScales, nbPlants, plantVertices,
-                              specialPlantVAO, specialPlantPosition1, specialPlantPosition2, specialPlantPosition3, specialPlantVertices);
+                              specialPlantVAO, specialPlantPosition1, specialPlantPosition2, specialPlantPosition3, specialPlantVertices,
+                              specialPlant1Collected, specialPlant2Collected, specialPlant3Collected);
         
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -1497,7 +1496,7 @@ void setupShadowMapping()
     // Create shadow shader program
     shadowShaderProgram = compileAndLinkShaders(getShadowVertexShaderSource(), getShadowFragmentShaderSource());
     
-    // Create new color shader with shadow support
+    // Create new color shader with shadows
     colorShaderProgramWithShadows = compileAndLinkShaders(getVertexShaderSourceWithShadows(), getFragmentShaderSourceWithShadows());
 }
 
@@ -1507,7 +1506,8 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
                            GLuint plantVAO, glm::vec3* plantPositions, glm::vec3* plantScales,
                            int plantCount, int plantVertices,
                            GLuint specialPlantVAO, glm::vec3 specialPlantPosition1, glm::vec3 specialPlantPosition2,
-                           glm::vec3 specialPlantPosition3, int specialPlantVertices)
+                           glm::vec3 specialPlantPosition3, int specialPlantVertices,
+                           bool specialPlant1Collected, bool specialPlant2Collected, bool specialPlant3Collected)
 {
     glUseProgram(shadowShaderProgram);
 
@@ -1515,12 +1515,12 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
     glUniformMatrix4fv(glGetUniformLocation(shadowShaderProgram, "lightSpaceMatrix"), 1, GL_FALSE, &lightSpaceMatrix[0][0]);
     GLuint worldMatrixLocation = glGetUniformLocation(shadowShaderProgram, "worldMatrix");
 
-    // Render ground
+    // Render ground (unchanged)
     glBindVertexArray(floorVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    // Render mushrooms
+    // Render mushrooms (unchanged)
     glBindVertexArray(mushroomVAO);
     for (int i = 0; i < mushroomCount; ++i) {
         glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) *
@@ -1529,7 +1529,7 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
         glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
     }
 
-    // Render plants
+    // Render plants (unchanged)
     glBindVertexArray(plantVAO);
     for (int i = 0; i < plantCount; ++i) {
         glm::mat4 plantMatrix = glm::translate(glm::mat4(1.0f), plantPositions[i]) *
@@ -1538,17 +1538,23 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
         glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
     }
 
-    // Render special plants
+    // Render special plants ONLY if they are not collected
     glBindVertexArray(specialPlantVAO);
-    glm::mat4 specialPlant1Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition1) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
-    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant1Matrix[0][0]);
-    glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    if (!specialPlant1Collected) {
+        glm::mat4 specialPlant1Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition1) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant1Matrix[0][0]);
+        glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    }
 
-    glm::mat4 specialPlant2Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition2) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
-    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant2Matrix[0][0]);
-    glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    if (!specialPlant2Collected) {
+        glm::mat4 specialPlant2Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition2) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant2Matrix[0][0]);
+        glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    }
 
-    glm::mat4 specialPlant3Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition3) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
-    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant3Matrix[0][0]);
-    glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    if (!specialPlant3Collected) {
+        glm::mat4 specialPlant3Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition3) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
+        glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant3Matrix[0][0]);
+        glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+    }
 }
