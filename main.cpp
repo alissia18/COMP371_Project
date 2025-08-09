@@ -37,11 +37,13 @@ int compileAndLinkShaders(const char* vertexShaderSource, const char* fragmentSh
 
 void setupShadowMapping();
 
-void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 groundWorldMatrix, 
-                          GLuint mushroomVAO, glm::vec3* mushroomPositions, glm::vec3* mushroomScales, 
-                          int mushroomCount, int mushroomVertices,
-                          GLuint plantVAO, glm::vec3* plantPositions, glm::vec3* plantScales, 
-                          int plantCount, int plantVertices);
+void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 groundWorldMatrix,
+                           GLuint mushroomVAO, glm::vec3* mushroomPositions, glm::vec3* mushroomScales,
+                           int mushroomCount, int mushroomVertices,
+                           GLuint plantVAO, glm::vec3* plantPositions, glm::vec3* plantScales,
+                           int plantCount, int plantVertices,
+                           GLuint specialPlantVAO, glm::vec3 specialPlantPosition1, glm::vec3 specialPlantPosition2,
+                           glm::vec3 specialPlantPosition3, int specialPlantVertices);
 
 using namespace glm;
 using namespace std;
@@ -392,137 +394,137 @@ const char* getVertexShaderSourceWithShadows()
 const char* getFragmentShaderSourceWithShadows()
 {
     return
-    "#version 330 core\n"
-    "in vec3 vertexColor;\n"
-    "in vec3 FragPos;\n"
-    "in vec3 Normal;\n"
-    "in vec4 FragPosLightSpace;\n"  // NEW: for shadow mapping
-    "out vec4 FragColor;\n"
-    "\n"
-    "uniform float alpha;\n"
-    "uniform vec3 cameraPos;\n"
-    "uniform vec3 fogColor;\n"
-    "uniform float fogStart;\n"
-    "uniform float fogEnd;\n"
-    // Flashlight uniforms
-    "uniform vec3 lightPos;\n"
-    "uniform vec3 lightDir;\n"
-    "uniform float cutOff;\n"
-    "uniform float outerCutOff;\n"
-    "uniform vec3 lightAmbient;\n"
-    "uniform vec3 lightDiffuse;\n"
-    "uniform vec3 lightSpecular;\n"
-    "uniform float shininess;\n"
-    // Magical light uniforms
-    "uniform vec3 magicalLightPos;\n"
-    "uniform vec3 magicalLightColor;\n"
-    "uniform float magicalLightIntensity;\n"
-    "uniform float magicalLightRadius;\n"
-    // NEW: Shadow uniforms
-    "uniform sampler2D shadowMap;\n"
-    "uniform bool enableShadows;\n"
-    "\n"
-    // Shadow calculation function
-    "float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDirection)\n"
-    "{\n"
-    "    // Perform perspective divide\n"
-    "    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;\n"
-    "    // Transform to [0,1] range\n"
-    "    projCoords = projCoords * 0.5 + 0.5;\n"
-    "\n"
-    "    // Get closest depth value from light's perspective\n"
-    "    float closestDepth = texture(shadowMap, projCoords.xy).r;\n"
-    "    // Get depth of current fragment from light's perspective\n"
-    "    float currentDepth = projCoords.z;\n"
-    "\n"
-    "    // Calculate bias to prevent shadow acne\n"
-    "    float bias = max(0.05 * (1.0 - dot(normal, lightDirection)), 0.005);\n"
-    "\n"
-    "    // Check whether current frag pos is in shadow\n"
-    "    // PCF (Percentage-closer filtering) for softer shadows\n"
-    "    float shadow = 0.0;\n"
-    "    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);\n"
-    "    for(int x = -1; x <= 1; ++x)\n"
-    "    {\n"
-    "        for(int y = -1; y <= 1; ++y)\n"
-    "        {\n"
-    "            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;\n"
-    "            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
-    "        }\n"
-    "    }\n"
-    "    shadow /= 9.0;\n"
-    "\n"
-    "    // Keep the shadow at 0.0 when outside the far_plane region\n"
-    "    if(projCoords.z > 1.0)\n"
-    "        shadow = 0.0;\n"
-    "\n"
-    "    return shadow;\n"
-    "}\n"
-    "\n"
-    "void main()\n"
-    "{\n"
-    "    vec3 norm = normalize(Normal);\n"
-    "\n"
-    // ENHANCED BASE AMBIENT - This ensures objects are never completely black
-    "    vec3 globalAmbient = vec3(0.2, 0.2, 0.25);\n" // Slightly blue ambient light
-    "    vec3 baseColor = vertexColor * globalAmbient;\n"
-    "\n"
-    // Flashlight calculations
-    "    vec3 lightDirection = normalize(lightPos - FragPos);\n"
-    "    float theta = dot(lightDirection, normalize(-lightDir));\n"
-    "    float epsilon = max(cutOff - outerCutOff, 0.001);\n" // Prevent division by zero
-    "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);\n"
-    "\n"
-    // Enhanced flashlight lighting with minimum ambient
-    "    vec3 ambient = max(lightAmbient, vec3(0.1)) * vertexColor;\n" // Ensure minimum ambient
-    "    float diff = max(dot(norm, lightDirection), 0.0);\n"
-    "    vec3 diffuse = lightDiffuse * diff * vertexColor;\n"
-    "    vec3 viewDir = normalize(cameraPos - FragPos);\n"
-    "    vec3 reflectDir = reflect(-lightDirection, norm);\n"
-    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));\n" // Prevent shininess issues
-    "    vec3 specular = lightSpecular * spec;\n"
-    "\n"
-    // NEW: Calculate shadow factor
-    "    float shadow = 0.0;\n"
-    "    if(enableShadows && intensity > 0.0)\n"  // Only calculate shadows where flashlight illuminates
-    "    {\n"
-    "        shadow = ShadowCalculation(FragPosLightSpace, norm, lightDirection);\n"
-    "    }\n"
-    "\n"
-    // Apply shadows to diffuse and specular (but not ambient)\n"
-    "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity * (1.0 - shadow);\n"
-    "\n"
-    // IMPROVED MAGICAL LIGHT CALCULATIONS (unchanged)
-    "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);\n"
-    "    float magicalDistance = length(magicalLightPos - FragPos);\n"
-    "\n"
-    // Better attenuation with safeguards
-    "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);\n"
-    "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);\n"
-    "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);\n"
-    "    magicalAttenuation *= magicalFalloff;\n"
-    "\n"
-    "    float magicalDiff = max(dot(norm, magicalLightDir), 0.0);\n"
-    "    vec3 magicalDiffuse = magicalLightColor * magicalDiff * vertexColor * magicalAttenuation;\n"
-    "\n"
-    "    vec3 magicalReflectDir = reflect(-magicalLightDir, norm);\n"
-    "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.5, 1.0));\n"
-    "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.3;\n"
-    "\n"
-    "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;\n"
-    "\n"
-    // COMBINE ALL LIGHTING WITH PROPER BASE
-    "    vec3 litColor = baseColor + flashlightLighting + magicalLighting;\n"
-    "    litColor = clamp(litColor, vec3(0.0), vec3(1.0));\n"
-    "\n"
-    // Apply fog with safeguards
-    "    float distance = length(cameraPos - FragPos);\n"
-    "    float fogRange = max(fogEnd - fogStart, 0.1);\n" // Prevent division by zero
-    "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);\n"
-    "    vec3 finalColor = mix(fogColor, litColor, fogFactor);\n"
-    "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));\n"
-    "    FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));\n"
-    "}\n";
+        "#version 330 core\n"
+        "in vec3 vertexColor;\n"
+        "in vec3 FragPos;\n"
+        "in vec3 Normal;\n"
+        "in vec4 FragPosLightSpace;\n"
+        "out vec4 FragColor;\n"
+        "\n"
+        "uniform float alpha;\n"
+        "uniform vec3 cameraPos;\n"
+        "uniform vec3 fogColor;\n"
+        "uniform float fogStart;\n"
+        "uniform float fogEnd;\n"
+        // Flashlight uniforms
+        "uniform vec3 lightPos;\n"
+        "uniform vec3 lightDir;\n"
+        "uniform float cutOff;\n"
+        "uniform float outerCutOff;\n"
+        "uniform vec3 lightAmbient;\n"
+        "uniform vec3 lightDiffuse;\n"
+        "uniform vec3 lightSpecular;\n"
+        "uniform float shininess;\n"
+        // Magical light uniforms
+        "uniform vec3 magicalLightPos;\n"
+        "uniform vec3 magicalLightColor;\n"
+        "uniform float magicalLightIntensity;\n"
+        "uniform float magicalLightRadius;\n"
+        // NEW: Shadow uniforms
+        "uniform sampler2D shadowMap;\n"
+        "uniform bool enableShadows;\n"
+        "\n"
+        // Shadow calculation function
+        "float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDirection)\n"
+        "{\n"
+        "    // Perform perspective divide\n"
+        "    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;\n"
+        "    // Transform to [0,1] range\n"
+        "    projCoords = projCoords * 0.5 + 0.5;\n"
+        "\n"
+        "    // Keep the shadow at 0.0 when outside the far_plane region\n"
+        "    if(projCoords.z > 1.0)\n"
+        "        return 0.0;\n"
+        "\n"
+        "    // Get closest depth value from light's perspective\n"
+        "    float closestDepth = texture(shadowMap, projCoords.xy).r;\n"
+        "    // Get depth of current fragment from light's perspective\n"
+        "    float currentDepth = projCoords.z;\n"
+        "\n"
+        "    // Calculate bias to prevent shadow acne\n"
+        "    float bias = max(0.05 * (1.0 - dot(normal, lightDirection)), 0.005);\n"
+        "\n"
+        "    // Check whether current frag pos is in shadow\n"
+        "    // PCF (Percentage-closer filtering) for softer shadows\n"
+        "    float shadow = 0.0;\n"
+        "    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);\n"
+        "    for(int x = -1; x <= 1; ++x)\n"
+        "    {\n"
+        "        for(int y = -1; y <= 1; ++y)\n"
+        "        {\n"
+        "            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;\n"
+        "            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
+        "        }\n"
+        "    }\n"
+        "    shadow /= 9.0;\n"
+        "\n"
+        "    return shadow;\n"
+        "}\n"
+        "\n"
+        "void main()\n"
+        "{\n"
+        "    vec3 norm = normalize(Normal);\n"
+        "\n"
+        "    // ENHANCED BASE AMBIENT - This ensures objects are never completely black\n"
+        "    vec3 globalAmbient = vec3(0.2, 0.2, 0.25);\n" // Slightly blue ambient light
+        "    vec3 baseColor = vertexColor * globalAmbient;\n"
+        "\n"
+        "    // Flashlight calculations\n"
+        "    vec3 lightDirection = normalize(lightPos - FragPos);\n"
+        "    float theta = dot(lightDirection, normalize(-lightDir));\n"
+        "    float epsilon = max(cutOff - outerCutOff, 0.001);\n" // Prevent division by zero
+        "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);\n"
+        "\n"
+        "    // Enhanced flashlight lighting with minimum ambient\n"
+        "    vec3 ambient = max(lightAmbient, vec3(0.1)) * vertexColor;\n" // Ensure minimum ambient
+        "    float diff = max(dot(norm, lightDirection), 0.0);\n"
+        "    vec3 diffuse = lightDiffuse * diff * vertexColor;\n"
+        "    vec3 viewDir = normalize(cameraPos - FragPos);\n"
+        "    vec3 reflectDir = reflect(-lightDirection, norm);\n"
+        "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));\n" // Prevent shininess issues
+        "    vec3 specular = lightSpecular * spec;\n"
+        "\n"
+        "    // NEW: Calculate shadow factor and apply to lighting\n"
+        "    float shadow = 0.0;\n"
+        "    if(enableShadows && intensity > 0.0)\n"
+        "    {\n"
+        "        shadow = ShadowCalculation(FragPosLightSpace, norm, lightDirection);\n"
+        "    }\n"
+        "\n"
+        "    // Apply shadows to diffuse and specular (but not ambient)\n"
+        "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity * (1.0 - shadow);\n"
+        "\n"
+        "    // IMPROVED MAGICAL LIGHT CALCULATIONS (unchanged)\n"
+        "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);\n"
+        "    float magicalDistance = length(magicalLightPos - FragPos);\n"
+        "\n"
+        "    // Better attenuation with safeguards\n"
+        "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);\n"
+        "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);\n"
+        "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);\n"
+        "    magicalAttenuation *= magicalFalloff;\n"
+        "\n"
+        "    float magicalDiff = max(dot(norm, magicalLightDir), 0.0);\n"
+        "    vec3 magicalDiffuse = magicalLightColor * magicalDiff * vertexColor * magicalAttenuation;\n"
+        "\n"
+        "    vec3 magicalReflectDir = reflect(-magicalLightDir, norm);\n"
+        "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.5, 1.0));\n"
+        "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.3;\n"
+        "\n"
+        "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;\n"
+        "\n"
+        "    // COMBINE ALL LIGHTING WITH PROPER BASE\n"
+        "    vec3 litColor = baseColor + flashlightLighting + magicalLighting;\n"
+        "    litColor = clamp(litColor, vec3(0.0), vec3(1.0));\n"
+        "\n"
+        "    // Apply fog with safeguards\n"
+        "    float distance = length(cameraPos - FragPos);\n"
+        "    float fogRange = max(fogEnd - fogStart, 0.1);\n" // Prevent division by zero
+        "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);\n"
+        "    vec3 finalColor = mix(fogColor, litColor, fogFactor);\n"
+        "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));\n"
+        "    FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));\n"
+        "}\n";
 }
 
 glm::mat4 getLightSpaceMatrix(glm::vec3 lightPos, glm::vec3 lightDir) 
@@ -1073,8 +1075,9 @@ while(!glfwWindowShouldClose(window))
         
         // Render scene from light's perspective
         renderSceneForShadows(lightSpaceMatrix, floorVAO, groundWorldMatrix,
-                             mushroomVAO, mushroomPositions, mushroomScales, 6, mushroomVertices,
-                             plantVAO, plantPositions, plantScales, nbPlants, plantVertices);
+                              mushroomVAO, mushroomPositions, mushroomScales, 6, mushroomVertices,
+                              plantVAO, plantPositions, plantScales, nbPlants, plantVertices,
+                              specialPlantVAO, specialPlantPosition1, specialPlantPosition2, specialPlantPosition3, specialPlantVertices);
         
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -1474,38 +1477,54 @@ void setupShadowMapping()
     colorShaderProgramWithShadows = compileAndLinkShaders(getVertexShaderSourceWithShadows(), getFragmentShaderSourceWithShadows());
 }
 
-void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 groundWorldMatrix, 
-                          GLuint mushroomVAO, glm::vec3* mushroomPositions, glm::vec3* mushroomScales, 
-                          int mushroomCount, int mushroomVertices,
-                          GLuint plantVAO, glm::vec3* plantPositions, glm::vec3* plantScales, 
-                          int plantCount, int plantVertices) 
+void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 groundWorldMatrix,
+                           GLuint mushroomVAO, glm::vec3* mushroomPositions, glm::vec3* mushroomScales,
+                           int mushroomCount, int mushroomVertices,
+                           GLuint plantVAO, glm::vec3* plantPositions, glm::vec3* plantScales,
+                           int plantCount, int plantVertices,
+                           GLuint specialPlantVAO, glm::vec3 specialPlantPosition1, glm::vec3 specialPlantPosition2,
+                           glm::vec3 specialPlantPosition3, int specialPlantVertices)
 {
     glUseProgram(shadowShaderProgram);
-    
+
     // Set light space matrix
     glUniformMatrix4fv(glGetUniformLocation(shadowShaderProgram, "lightSpaceMatrix"), 1, GL_FALSE, &lightSpaceMatrix[0][0]);
     GLuint worldMatrixLocation = glGetUniformLocation(shadowShaderProgram, "worldMatrix");
-    
+
     // Render ground
     glBindVertexArray(floorVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
-    glDrawArrays(GL_TRIANGLES, 0, 6); // Floor has 6 vertices (2 triangles)
-    
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
     // Render mushrooms
     glBindVertexArray(mushroomVAO);
     for (int i = 0; i < mushroomCount; ++i) {
-        glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) * 
+        glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) *
                                    glm::scale(glm::mat4(1.0f), mushroomScales[i]);
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &mushroomMatrix[0][0]);
         glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
     }
-    
+
     // Render plants
     glBindVertexArray(plantVAO);
     for (int i = 0; i < plantCount; ++i) {
-        glm::mat4 plantMatrix = glm::translate(glm::mat4(1.0f), plantPositions[i]) * 
+        glm::mat4 plantMatrix = glm::translate(glm::mat4(1.0f), plantPositions[i]) *
                                 glm::scale(glm::mat4(1.0f), plantScales[i]);
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
         glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
     }
+
+    // Render special plants
+    glBindVertexArray(specialPlantVAO);
+    glm::mat4 specialPlant1Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition1) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant1Matrix[0][0]);
+    glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+
+    glm::mat4 specialPlant2Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition2) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant2Matrix[0][0]);
+    glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
+
+    glm::mat4 specialPlant3Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition3) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant3Matrix[0][0]);
+    glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
 }
