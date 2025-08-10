@@ -1,42 +1,27 @@
-// COMP371 Assignment 1
+// COMP371 Assignment 2
 // By Alissia Bocarro and Shania Filosi
 
+// 
 #include <iostream>
-
-
-#define GLEW_STATIC 1   // This allows linking with Static Library on Windows, without DLL
-#include <GL/glew.h>    // Include GLEW - OpenGL Extension Wrangler
-
-#include <GLFW/glfw3.h> // GLFW provides a cross-platform interface for creating a graphical context,
-                        // initializing OpenGL and binding inputs
-
-#include <glm/glm.hpp>  // GLM is an optimized math library with syntax to similar to OpenGL Shading Language
-#include <glm/gtc/matrix_transform.hpp> // include this to create transformation matrices
-
+#define GLEW_STATIC 1
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
+#include "OBJloaderV2.h"
 
-#include "OBJloaderV2.h"  //For loading .obj files using a polygon list format
-
-
+//
 void mouse_callback (GLFWwindow* window, double xpos, double ypos);
-
 GLuint loadTexture(const char *filename);
-
 const char* getVertexShaderSource();
-
 const char* getFragmentShaderSource();
-
 const char* getTexturedVertexShaderSource();
-
 const char* getTexturedFragmentShaderSource();
-
 int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize);
-
 int compileAndLinkShaders(const char* vertexShaderSource, const char* fragmentShaderSource);
-
 void setupShadowMapping();
-
 void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 groundWorldMatrix,
                            GLuint mushroomVAO, glm::vec3* mushroomPositions, glm::vec3* mushroomScales,
                            int mushroomCount, int mushroomVertices,
@@ -56,38 +41,33 @@ using namespace std;
 // flashlight variables
 bool flashlightOn = true;
 bool fKeyPressed = false;
-// Magical light variable
+// magical light variables
 bool magicalLightOn = true;
 bool mKeyPressed = false;
-
-// camera movement
+// camera movement variables
 vec3 cameraPos   = vec3(0.0f, 1.0f,  10.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
 vec3 cameraUp = vec3(0.0f, 1.0f, 0.0f);
 vec3 cameraRight = normalize(cross(cameraFront, cameraUp));
 float yaw = -90.0f; // initialized to -90 because 0 results in pointing to the right, -90 makes it forward
 float pitch = 0.0f;
-// float fov = 45.0f;
-
-// mouse state 
+// mouse state variables
 bool firstMouse = true;
 float lastX = 800.0f / 2.0;
 float lastY = 600.0 / 2.0;
-
-// timing
+// timing variables
 float deltaTime = 0.0f; // time bw current and last frame
 float lastFrame = 0.0f;
-
+//
 unsigned int depthMapFBO, depthMap;
 const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
 int shadowShaderProgram;
 int texturedShadowShaderProgram;
 int colorShaderProgramWithShadows;  // New shader program with shadows
 
-
+// Shaders
 const char* getVertexShaderSource()
 {
-    // For now, you use a string for your shader code, in the assignment, shaders will be stored in .glsl files
     return
                 "#version 330 core\n"
                 "layout (location = 0) in vec3 aPos;"
@@ -968,13 +948,6 @@ int main(int argc, char*argv[])
     glEnable(GL_DEPTH_TEST); 
 
     // Load Textures
-    GLuint mushroom1TextureID = loadTexture("Textures/mushroom.png");
-    GLuint mushroom2TextureID = loadTexture("Textures/mushroom2.png");
-    GLuint mushroom3TextureID = loadTexture("Textures/mushroom3.png");
-    GLuint mushroom4TextureID = loadTexture("Textures/mushroom4.png");
-    GLuint mushroom5TextureID = loadTexture("Textures/mushroom5.png");
-    GLuint mushroom6TextureID = loadTexture("Textures/mushroom6.png");
-    GLuint mushroomTextureIDs[] = {mushroom1TextureID, mushroom2TextureID, mushroom3TextureID, mushroom4TextureID, mushroom5TextureID, mushroom6TextureID};
     GLuint mushroomTextureID = loadTexture("Textures/mushroom_texture.png");
     GLuint flowerTextureID = loadTexture("Textures/flower.png");
     GLuint waterTextureID = loadTexture("Textures/water.png");
@@ -1014,7 +987,6 @@ int main(int argc, char*argv[])
     
     // Define and upload geometry to the GPU here ...
     int floorVAO = createVertexArrayObject(floorVertices, sizeof(floorVertices));
-    int mushroomPlaneVAO = createTexturedVertexArrayObject(mushroomPlane, sizeof(mushroomPlane));
     int flowerPlaneVAO = createTexturedVertexArrayObject(flowerPlane, sizeof(flowerPlane));
     int dragonflyPlaneVAO = createTexturedVertexArrayObject(dragonflyPlane, sizeof(dragonflyPlane));
     int skyboxVAO = createTexturedVertexArrayObject(skyboxCube, sizeof(skyboxCube));
