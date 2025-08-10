@@ -47,7 +47,8 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
                            bool specialPlant1Collected, bool specialPlant2Collected, bool specialPlant3Collected,
                            GLuint flowerPlaneVAO, int flowerVertices, float angle, glm::vec3 flowerPosition,
                            GLuint dragonflyPlaneVAO, int dragonflyVertices, glm::vec3 dragonflyPosition,
-                           glm::vec3 wingPositionFront, glm::vec3 wingPositionBack);
+                           glm::vec3 wingPositionFront, glm::vec3 wingPositionBack,
+                           GLuint flowerTextureID, GLuint dragonflyBodyTextureID, GLuint wingTextureID);
 
 using namespace glm;
 using namespace std;
@@ -80,6 +81,7 @@ float lastFrame = 0.0f;
 unsigned int depthMapFBO, depthMap;
 const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
 int shadowShaderProgram;
+int texturedShadowShaderProgram;
 int colorShaderProgramWithShadows;  // New shader program with shadows
 
 
@@ -528,6 +530,42 @@ const char* getFragmentShaderSourceWithShadows()
         "    vec3 finalColor = mix(fogColor, litColor, fogFactor);\n"
         "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));\n"
         "    FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));\n"
+        "}\n";
+}
+
+const char* getTexShadowVertexShaderSource()
+{
+    return
+        "#version 330 core\n"
+        "layout (location = 0) in vec3 aPos;\n"
+        "layout (location = 2) in vec2 aUV;\n" // UV input
+        "\n"
+        "uniform mat4 lightSpaceMatrix;\n"
+        "uniform mat4 worldMatrix;\n"
+        "\n"
+        "out vec2 TexCoords;\n"
+        "\n"
+        "void main()\n"
+        "{\n"
+        "    TexCoords = aUV;\n"
+        "    gl_Position = lightSpaceMatrix * worldMatrix * vec4(aPos, 1.0);\n"
+        "}\n";
+}
+
+const char* getTexShadowFragmentShaderSource()
+{
+    return
+        "#version 330 core\n"
+        "in vec2 TexCoords;\n"
+        "\n"
+        "uniform sampler2D textureSampler;\n"
+        "\n"
+        "void main()\n"
+        "{\n"
+        "    float alpha = texture(textureSampler, TexCoords).a;\n"
+        "    if (alpha < 0.5) {\n"
+        "        discard;\n"
+        "    }\n"
         "}\n";
 }
 
@@ -1085,7 +1123,8 @@ while(!glfwWindowShouldClose(window))
                               specialPlant1Collected, specialPlant2Collected, specialPlant3Collected,
                               flowerPlaneVAO, 6, angle, flowerPosition,
                               dragonflyPlaneVAO, 6, dragonflyPosition,
-                              wingPositionFront, wingPositionBack);
+                              wingPositionFront, wingPositionBack,
+                              flowerTextureID, dragonflyBodyTextureID, wingTextureID);
         
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -1502,6 +1541,8 @@ void setupShadowMapping()
     // Create shadow shader program
     shadowShaderProgram = compileAndLinkShaders(getShadowVertexShaderSource(), getShadowFragmentShaderSource());
     
+    texturedShadowShaderProgram = compileAndLinkShaders(getTexShadowVertexShaderSource(), getTexShadowFragmentShaderSource());
+
     // Create new color shader with shadows
     colorShaderProgramWithShadows = compileAndLinkShaders(getVertexShaderSourceWithShadows(), getFragmentShaderSourceWithShadows());
 }
@@ -1516,7 +1557,8 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
                            bool specialPlant1Collected, bool specialPlant2Collected, bool specialPlant3Collected,
                            GLuint flowerPlaneVAO, int flowerVertices, float angle, glm::vec3 flowerPosition,
                            GLuint dragonflyPlaneVAO, int dragonflyVertices, glm::vec3 dragonflyPosition,
-                           glm::vec3 wingPositionFront, glm::vec3 wingPositionBack)
+                           glm::vec3 wingPositionFront, glm::vec3 wingPositionBack,
+                           GLuint flowerTextureID, GLuint dragonflyBodyTextureID, GLuint wingTextureID)
 {
     glUseProgram(shadowShaderProgram);
 
@@ -1569,52 +1611,56 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
 
     // Render the plant and dragonfly for shadow map generation
 
-    // Draw flower
+    glUseProgram(texturedShadowShaderProgram);
+    glUniformMatrix4fv(glGetUniformLocation(texturedShadowShaderProgram, "lightSpaceMatrix"), 1, GL_FALSE, &lightSpaceMatrix[0][0]);
+    worldMatrixLocation = glGetUniformLocation(texturedShadowShaderProgram, "worldMatrix");
+    glUniform1i(glGetUniformLocation(texturedShadowShaderProgram, "textureSampler"), 0);
+
+    // Render the flower
     glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
     float angleRadians = glm::radians(angle);
-    
     glm::mat4 plantMatrix =
         glm::translate(glm::mat4(1.0f), flowerPosition) *
         glm::translate(glm::mat4(1.0f), stemOffset) *
         glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *
         glm::translate(glm::mat4(1.0f), -stemOffset) *
-        glm::scale(glm::mat4(1.0f), glm::vec3(2,2,2));
+        glm::scale(glm::mat4(1.0f), glm::vec3(2, 2, 2));
 
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, flowerTextureID);
     glBindVertexArray(flowerPlaneVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, flowerVertices);
 
-    // Draw dragonfly body
+    // Render the dragonfly body
     glm::mat4 dragonflyLocalMatrix = glm::translate(glm::mat4(1.0f), dragonflyPosition - flowerPosition);
     glm::mat4 dragonflyWorldMatrix = plantMatrix * dragonflyLocalMatrix;
     
+    glBindTexture(GL_TEXTURE_2D, dragonflyBodyTextureID);
     glBindVertexArray(dragonflyPlaneVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, dragonflyVertices);
 
-    // Draw dragonfly wings with animation
+    // Render the dragonfly wings
     float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));
     glm::vec3 wingOffsetFront = wingPositionFront - flowerPosition;
-    
     glm::mat4 wingFrontLocalMatrix =
         glm::translate(glm::mat4(1.0f), wingOffsetFront) *
         glm::rotate(glm::mat4(1.0f), glm::radians(flapAngle), glm::vec3(1, 0, 0));
-    
     glm::mat4 wingFrontWorldMatrix = plantMatrix * wingFrontLocalMatrix;
-    
+
+    glBindTexture(GL_TEXTURE_2D, wingTextureID);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingFrontWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, dragonflyVertices);
 
-    // Back wing
+    // Render the back wing
     float flapAngleBack = -12.0f * glm::abs(sin(glfwGetTime() * 2.0f));
     glm::vec3 wingOffsetBack = wingPositionBack - flowerPosition;
-    
     glm::mat4 wingBackLocalMatrix =
         glm::translate(glm::mat4(1.0f), wingOffsetBack) *
         glm::rotate(glm::mat4(1.0f), glm::radians(flapAngleBack), glm::vec3(1, 0, 0));
-    
     glm::mat4 wingBackWorldMatrix = plantMatrix * wingBackLocalMatrix;
-    
+
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingBackWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, dragonflyVertices);
 }
