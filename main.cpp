@@ -137,24 +137,24 @@ const char* getFragmentShaderSource() // Fragment shader
     // Flashlight calculations
     "    vec3 lightDirection = normalize(lightPos - FragPos);"
     "    float theta = dot(lightDirection, normalize(-lightDir));"
-    "    float epsilon = max(cutOff - outerCutOff, 0.001);" // Prevent division by zero
+    "    float epsilon = max(cutOff - outerCutOff, 0.001);" // prevent division by zero
     "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
     ""
-    // Enhanced flashlight lighting with minimum ambient
-    "    vec3 ambient = max(lightAmbient, vec3(0.1)) * vertexColor;" // Ensure minimum ambient
+    // Flashlight lighting
+    "    vec3 ambient = max(lightAmbient, vec3(0.1)) * vertexColor;" // ensure minimum ambient
     "    float diff = max(dot(norm, lightDirection), 0.0);"
     "    vec3 diffuse = lightDiffuse * diff * vertexColor;"
     "    vec3 viewDir = normalize(cameraPos - FragPos);"
     "    vec3 reflectDir = reflect(-lightDirection, norm);"
-    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));" // Prevent shininess issues
+    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));" // prevent shininess issues
     "    vec3 specular = lightSpecular * spec;"
     "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"
     ""
-    // Magical Light Calculations
+    // Magical light calculations
     "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);"
     "    float magicalDistance = length(magicalLightPos - FragPos);"
     ""
-    // Attenuation
+    // Magical lighting
     "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);"
     "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);"
     "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);"
@@ -175,7 +175,7 @@ const char* getFragmentShaderSource() // Fragment shader
     ""
     // Apply fog
     "    float distance = length(cameraPos - FragPos);"
-    "    float fogRange = max(fogEnd - fogStart, 0.1);" // Prevent division by zero
+    "    float fogRange = max(fogEnd - fogStart, 0.1);" // prevent division by zero
     "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);"
     "    vec3 finalColor = mix(fogColor, litColor, fogFactor);"
     "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));"
@@ -231,7 +231,7 @@ const char* getTexturedFragmentShaderSource() // Textured fragment shader
     "uniform float fogStart;"
     "uniform float fogEnd;"
     ""
-    // Spotlight uniforms
+    // Flashlight uniforms
     "uniform vec3 lightPos;"
     "uniform vec3 lightDir;"
     "uniform float cutOff;"
@@ -247,7 +247,7 @@ const char* getTexturedFragmentShaderSource() // Textured fragment shader
     "uniform float magicalLightIntensity;"
     "uniform float magicalLightRadius;"
     ""
-    // Customization parameters with defaults
+    // Customization parameters
     "uniform float lightOpacity = 0.8;"
     "uniform vec3 flashlightColor = vec3(1.0, 1.0, 0.6);"
     "uniform float falloffSmoothness = 2.0;"
@@ -256,70 +256,69 @@ const char* getTexturedFragmentShaderSource() // Textured fragment shader
     ""
     "void main()"
     "{"
-    "   vec4 textureColor = texture(textureSampler, vertexUV);"
-    "   if(textureColor.a < 0.5) discard;"
+    "    vec4 textureColor = texture(textureSampler, vertexUV);"
+    "    if(textureColor.a < 0.5) discard;"
     ""
-    // ENHANCED BASE AMBIENT for textured objects
-    "   vec3 globalAmbient = vec3(0.25, 0.25, 0.3);" // slightly brighter for textured objects
-    "   vec3 baseColor = textureColor.rgb * globalAmbient;"
+    // Base ambient for textured objects
+    "    vec3 globalAmbient = vec3(0.25, 0.25, 0.3);" // slightly brighter for textured objects
+    "    vec3 baseColor = textureColor.rgb * globalAmbient;"
     ""
     // Lighting calculations
-    "   vec3 norm = normalize(Normal);"
-    "   vec3 lightDirection = normalize(lightPos - FragPos);"
-    "   float theta = dot(lightDirection, normalize(-lightDir));"
+    "    vec3 norm = normalize(Normal);"
+    "    vec3 lightDirection = normalize(lightPos - FragPos);"
+    "    float theta = dot(lightDirection, normalize(-lightDir));"
     ""
-    // Enhanced spotlight falloff with smoothness parameter
-    "   float epsilon = max(cutOff - outerCutOff, 0.001);" // Prevent division by zero
-    "   float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
-    "   intensity = pow(intensity, max(falloffSmoothness, 0.1));" // Safeguard smoothness
+    // Flashlight falloff
+    "    float epsilon = max(cutOff - outerCutOff, 0.001);" // prevent division by zero
+    "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);"
+    "    intensity = pow(intensity, max(falloffSmoothness, 0.1));"
     ""
-    // Ambient lighting - ensure it's never zero
-    "   vec3 ambient = max(lightAmbient, vec3(0.15)) * textureColor.rgb;"
+    "    vec3 ambient = max(lightAmbient, vec3(0.15)) * textureColor.rgb;" // ensure it's never zero
     ""
     // Diffuse lighting
-    "   float diff = max(dot(norm, lightDirection), 0.0);"
-    "   vec3 diffuse = lightDiffuse * diff * textureColor.rgb;"
+    "    float diff = max(dot(norm, lightDirection), 0.0);"
+    "    vec3 diffuse = lightDiffuse * diff * textureColor.rgb;"
     ""
     // Specular lighting
-    "   vec3 viewDir = normalize(cameraPos - FragPos);"
-    "   vec3 reflectDir = reflect(-lightDirection, norm);"
-    "   float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));" // Prevent shininess issues
-    "   vec3 specular = lightSpecular * spec;"
+    "    vec3 viewDir = normalize(cameraPos - FragPos);"
+    "    vec3 reflectDir = reflect(-lightDirection, norm);"
+    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));" // Prevent shininess issues
+    "    vec3 specular = lightSpecular * spec;"
     ""
     // Flashlight contribution
-    "   vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"
-    "   vec3 lightContribution = intensity * lightDiffuse * flashlightColor * clamp(lightOpacity, 0.0, 1.0);"
+    "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity;"
+    "    vec3 lightContribution = intensity * lightDiffuse * flashlightColor * clamp(lightOpacity, 0.0, 1.0);"
     ""
-    // IMPROVED MAGICAL LIGHT CALCULATIONS
-    "   vec3 magicalLightDir = normalize(magicalLightPos - FragPos);"
-    "   float magicalDistance = length(magicalLightPos - FragPos);"
+    // Magical light calculations
+    "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);"
+    "    float magicalDistance = length(magicalLightPos - FragPos);"
     ""
-    // Better attenuation with safeguards
-    "   float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);"
-    "   float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);"
-    "   magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);"
-    "   magicalAttenuation *= magicalFalloff;"
+    // Magical lighting
+    "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);"
+    "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);"
+    "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);"
+    "    magicalAttenuation *= magicalFalloff;"
     ""
-    "   float magicalDiff = max(dot(norm, magicalLightDir), 0.0);"
-    "   vec3 magicalDiffuse = magicalLightColor * magicalDiff * textureColor.rgb * magicalAttenuation;"
+    "    float magicalDiff = max(dot(norm, magicalLightDir), 0.0);"
+    "    vec3 magicalDiffuse = magicalLightColor * magicalDiff * textureColor.rgb * magicalAttenuation;"
     ""
-    "   vec3 magicalReflectDir = reflect(-magicalLightDir, norm);"
-    "   float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.3, 1.0));"
-    "   vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.2;"
+    "    vec3 magicalReflectDir = reflect(-magicalLightDir, norm);"
+    "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.3, 1.0));"
+    "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.2;"
     ""
-    "   vec3 magicalLighting = magicalDiffuse + magicalSpecular;"
+    "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;"
     ""
-    // COMBINE ALL LIGHTING WITH PROPER BASE
-    "   vec3 litColor = baseColor + flashlightLighting + lightContribution + magicalLighting;"
-    "   litColor = clamp(litColor, vec3(0.0), vec3(1.0));"
+    // Combine all lighting
+    "    vec3 litColor = baseColor + flashlightLighting + lightContribution + magicalLighting;"
+    "    litColor = clamp(litColor, vec3(0.0), vec3(1.0));"
     ""
-    // Apply fog with safeguards
-    "   float distance = length(cameraPos - FragPos);"
-    "   float fogRange = max(fogEnd - fogStart, 0.1);" // Prevent division by zero
-    "   float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);"
-    "   vec3 finalColor = mix(fogColor, litColor, fogFactor);"
-    "   finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));"
-    "   FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));"
+    // Apply fog
+    "    float distance = length(cameraPos - FragPos);"
+    "    float fogRange = max(fogEnd - fogStart, 0.1);" // prevent division by zero
+    "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);"
+    "    vec3 finalColor = mix(fogColor, litColor, fogFactor);"
+    "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));"
+    "    FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));"
     "}";
 }
 
@@ -327,224 +326,224 @@ const char* getShadowVertexShaderSource() // Shadow vertex shader
 {
     return
     "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;"
-    ""
-    "uniform mat4 lightSpaceMatrix;"
-    "uniform mat4 worldMatrix;"
-    ""
-    "void main()"
-    "{"
-    "    gl_Position = lightSpaceMatrix * worldMatrix * vec4(aPos, 1.0);"
-    "}";
+    "layout (location = 0) in vec3 aPos;\n"
+    "\n"
+    "uniform mat4 lightSpaceMatrix;\n"
+    "uniform mat4 worldMatrix;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    gl_Position = lightSpaceMatrix * worldMatrix * vec4(aPos, 1.0);\n"
+    "}\n";
 }
 
 const char* getShadowFragmentShaderSource() // Shadow fragment shader
 {
     return
     "#version 330 core\n"
-    ""
-    "void main()"
-    "{"
-    "    // gl_FragDepth is written automatically"
-    "}";
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    // gl_FragDepth is automatically written\n"
+    "}\n";
 }
 
 const char* getVertexShaderSourceWithShadows() // Vertex shader with shadows
 {
     return
     "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;"
-    "layout (location = 1) in vec3 aColor;"
-    "layout (location = 2) in vec3 aNormal;"
-    ""
-    "uniform mat4 worldMatrix;"
-    "uniform mat4 viewMatrix = mat4(1.0);"
-    "uniform mat4 projectionMatrix = mat4(1.0);"
-    "uniform mat4 lightSpaceMatrix;"  // for shadow mapping
-    ""
-    "out vec3 vertexColor;"
-    "out vec3 FragPos;"
-    "out vec3 Normal;"
-    "out vec4 FragPosLightSpace;"  // for shadow mapping
-    ""
-    "void main()"
-    "{"
-    "    vertexColor = aColor;"
-    "    vec4 worldPos = worldMatrix * vec4(aPos, 1.0);"
-    "    FragPos = worldPos.xyz;"
-    "    Normal = mat3(transpose(inverse(worldMatrix))) * aNormal;"
-    "    FragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);"
-    "    mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;"
-    "    gl_Position = modelViewProjection * vec4(aPos.x, aPos.y, aPos.z, 1.0);"
-    "}";
+    "layout (location = 0) in vec3 aPos;\n"
+    "layout (location = 1) in vec3 aColor;\n"
+    "layout (location = 2) in vec3 aNormal;\n"
+    "\n"
+    "uniform mat4 worldMatrix;\n"
+    "uniform mat4 viewMatrix = mat4(1.0);\n"
+    "uniform mat4 projectionMatrix = mat4(1.0);\n"
+    "uniform mat4 lightSpaceMatrix;\n" // for shadow mapping
+    "\n"
+    "out vec3 vertexColor;\n"
+    "out vec3 FragPos;\n"
+    "out vec3 Normal;\n"
+    "out vec4 FragPosLightSpace;\n"    // for shadow mapping
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    vertexColor = aColor;\n"
+    "    vec4 worldPos = worldMatrix * vec4(aPos, 1.0);\n"
+    "    FragPos = worldPos.xyz;\n"
+    "    Normal = mat3(transpose(inverse(worldMatrix))) * aNormal;\n"
+    "    FragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);\n"
+    "    mat4 modelViewProjection = projectionMatrix * viewMatrix * worldMatrix;\n"
+    "    gl_Position = modelViewProjection * vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+    "}\n";
 }
 
 const char* getFragmentShaderSourceWithShadows() // Fragment shader with shadows
 {
     return
-        "#version 330 core\n"
-        "in vec3 vertexColor;"
-        "in vec3 FragPos;"
-        "in vec3 Normal;"
-        "in vec4 FragPosLightSpace;"
-        ""
-        "out vec4 FragColor;"
-        ""
-        "uniform float alpha;"
-        "uniform vec3 cameraPos;"
-        "uniform vec3 fogColor;"
-        "uniform float fogStart;"
-        "uniform float fogEnd;"
-        // Flashlight uniforms
-        "uniform vec3 lightPos;"
-        "uniform vec3 lightDir;"
-        "uniform float cutOff;"
-        "uniform float outerCutOff;"
-        "uniform vec3 lightAmbient;"
-        "uniform vec3 lightDiffuse;"
-        "uniform vec3 lightSpecular;"
-        "uniform float shininess;"
-        // Magical light uniforms
-        "uniform vec3 magicalLightPos;"
-        "uniform vec3 magicalLightColor;"
-        "uniform float magicalLightIntensity;"
-        "uniform float magicalLightRadius;"
-        // Shadow uniforms
-        "uniform sampler2D shadowMap;"
-        "uniform bool enableShadows;"
-        "\n"
-        // Shadow calculation function
-        "float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDirection)"
-        "{"
-        "    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;\n"
-        "    projCoords = projCoords * 0.5 + 0.5;\n"
-        ""
-        "    if(projCoords.z > 1.0)\n"
-        "        return 0.0;\n"
-        "\n"
-        "    // Get closest depth value from light's perspective\n"
-        "    float closestDepth = texture(shadowMap, projCoords.xy).r;\n"
-        "    // Get depth of current fragment from light's perspective\n"
-        "    float currentDepth = projCoords.z;\n"
-        "\n"
-        "    float bias = max(0.05 * (1.0 - dot(normal, lightDirection)), 0.005);\n"
-        "\n"
-        "    // Check whether current frag pos is in shadow\n"
-        "    float shadow = 0.0;\n"
-        "    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);\n"
-        "    for(int x = -1; x <= 1; ++x)\n"
-        "    {\n"
-        "        for(int y = -1; y <= 1; ++y)\n"
-        "        {\n"
-        "            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;\n"
-        "            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
-        "        }\n"
-        "    }\n"
-        "    shadow /= 9.0;\n"
-        "\n"
-        "    return shadow;\n"
-        "}\n"
-        "\n"
-        "void main()\n"
-        "{\n"
-        "    vec3 norm = normalize(Normal);\n"
-        "\n"
-        "    // ENHANCED BASE AMBIENT - This ensures objects are never completely black\n"
-        "    vec3 globalAmbient = vec3(0.2, 0.2, 0.25);\n" // slightly blue ambient light
-        "    vec3 baseColor = vertexColor * globalAmbient;\n"
-        "\n"
-        "    // Flashlight calculations\n"
-        "    vec3 lightDirection = normalize(lightPos - FragPos);\n"
-        "    float theta = dot(lightDirection, normalize(-lightDir));\n"
-        "    float epsilon = max(cutOff - outerCutOff, 0.001);\n" // Prevent division by zero
-        "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);\n"
-        "\n"
-        "    // Enhanced flashlight lighting with minimum ambient\n"
-        "    vec3 ambient = max(lightAmbient, vec3(0.1)) * vertexColor;\n" // Ensure minimum ambient
-        "    float diff = max(dot(norm, lightDirection), 0.0);\n"
-        "    vec3 diffuse = lightDiffuse * diff * vertexColor;\n"
-        "    vec3 viewDir = normalize(cameraPos - FragPos);\n"
-        "    vec3 reflectDir = reflect(-lightDirection, norm);\n"
-        "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));\n" // Prevent shininess issues
-        "    vec3 specular = lightSpecular * spec;\n"
-        "\n"
-        "    // Calculate shadow factor and apply to lighting\n"
-        "    float shadow = 0.0;\n"
-        "    if(enableShadows && intensity > 0.0)\n"
-        "    {\n"
-        "        shadow = ShadowCalculation(FragPosLightSpace, norm, lightDirection);\n"
-        "    }\n"
-        "\n"
-        "    // Apply shadows to diffuse and specular (but not ambient)\n"
-        "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity * (1.0 - shadow);\n"
-        "\n"
-        "    // IMPROVED MAGICAL LIGHT CALCULATIONS (unchanged)\n"
-        "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);\n"
-        "    float magicalDistance = length(magicalLightPos - FragPos);\n"
-        "\n"
-        "    // Better attenuation with safeguards\n"
-        "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);\n"
-        "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);\n"
-        "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);\n"
-        "    magicalAttenuation *= magicalFalloff;\n"
-        "\n"
-        "    float magicalDiff = max(dot(norm, magicalLightDir), 0.0);\n"
-        "    vec3 magicalDiffuse = magicalLightColor * magicalDiff * vertexColor * magicalAttenuation;\n"
-        "\n"
-        "    vec3 magicalReflectDir = reflect(-magicalLightDir, norm);\n"
-        "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.5, 1.0));\n"
-        "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.3;\n"
-        "\n"
-        "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;\n"
-        "\n"
-        "    // COMBINE ALL LIGHTING WITH PROPER BASE\n"
-        "    vec3 litColor = baseColor + flashlightLighting + magicalLighting;\n"
-        "    litColor = clamp(litColor, vec3(0.0), vec3(1.0));\n"
-        "\n"
-        "    // Apply fog with safeguards\n"
-        "    float distance = length(cameraPos - FragPos);\n"
-        "    float fogRange = max(fogEnd - fogStart, 0.1);\n" // Prevent division by zero
-        "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);\n"
-        "    vec3 finalColor = mix(fogColor, litColor, fogFactor);\n"
-        "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));\n"
-        "    FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));\n"
-        "}\n";
+    "#version 330 core\n"
+    "in vec3 vertexColor;\n"
+    "in vec3 FragPos;\n"
+    "in vec3 Normal;\n"
+    "in vec4 FragPosLightSpace;\n"
+    "\n"
+    "out vec4 FragColor;\n"
+    "\n"
+    "uniform float alpha;\n"
+    "uniform vec3 cameraPos;\n"
+    "uniform vec3 fogColor;\n"
+    "uniform float fogStart;\n"
+    "uniform float fogEnd;\n"
+    // Flashlight uniforms
+    "uniform vec3 lightPos;\n"
+    "uniform vec3 lightDir;\n"
+    "uniform float cutOff;\n"
+    "uniform float outerCutOff;\n"
+    "uniform vec3 lightAmbient;\n"
+    "uniform vec3 lightDiffuse;\n"
+    "uniform vec3 lightSpecular;\n"
+    "uniform float shininess;\n"
+    // Magical light uniforms
+    "uniform vec3 magicalLightPos;\n"
+    "uniform vec3 magicalLightColor;\n"
+    "uniform float magicalLightIntensity;\n"
+    "uniform float magicalLightRadius;\n"
+    // Shadow uniforms
+    "uniform sampler2D shadowMap;\n"
+    "uniform bool enableShadows;\n"
+    "\n"
+    // Shadow calculation function
+    "float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDirection)\n"
+    "{\n"
+    "    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;\n"
+    "    projCoords = projCoords * 0.5 + 0.5;\n"
+    "\n"
+    "    if(projCoords.z > 1.0)\n"
+    "        return 0.0;\n"
+    "\n"
+    // get closest depth value from light's perspective
+    "    float closestDepth = texture(shadowMap, projCoords.xy).r;\n"
+    // get depth of current fragment ^
+    "    float currentDepth = projCoords.z;\n"
+    "\n"
+    "    float bias = max(0.05 * (1.0 - dot(normal, lightDirection)), 0.005);\n"
+    "\n"
+    // check whether current fragment position is in shadow
+    "    float shadow = 0.0;\n"
+    "    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);\n"
+    "    for(int x = -1; x <= 1; ++x)\n"
+    "    {\n"
+    "        for(int y = -1; y <= 1; ++y)\n"
+    "        {\n"
+    "            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;\n"
+    "            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
+    "        }\n"
+    "    }\n"
+    "    shadow /= 9.0;\n"
+    "\n"
+    "    return shadow;\n"
+    "}\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    vec3 norm = normalize(Normal);\n"
+    "\n"
+    // Base ambient
+    "    vec3 globalAmbient = vec3(0.2, 0.2, 0.25);\n" // slightly blue ambient light
+    "    vec3 baseColor = vertexColor * globalAmbient;\n"
+    "\n"
+    // Flashlight calculations
+    "    vec3 lightDirection = normalize(lightPos - FragPos);\n"
+    "    float theta = dot(lightDirection, normalize(-lightDir));\n"
+    "    float epsilon = max(cutOff - outerCutOff, 0.001);\n" // prevent division by zero
+    "    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);\n"
+    "\n"
+    // Flashlight lighting
+    "    vec3 ambient = max(lightAmbient, vec3(0.1)) * vertexColor;\n" // ensure minimum ambient
+    "    float diff = max(dot(norm, lightDirection), 0.0);\n"
+    "    vec3 diffuse = lightDiffuse * diff * vertexColor;\n"
+    "    vec3 viewDir = normalize(cameraPos - FragPos);\n"
+    "    vec3 reflectDir = reflect(-lightDirection, norm);\n"
+    "    float spec = pow(max(dot(viewDir, reflectDir), 0.0), max(shininess, 1.0));\n" // prevent shininess issues
+    "    vec3 specular = lightSpecular * spec;\n"
+    "\n"
+    // Shadow calculation
+    "    float shadow = 0.0;\n"
+    "    if(enableShadows && intensity > 0.0)\n"
+    "    {\n"
+    "        shadow = ShadowCalculation(FragPosLightSpace, norm, lightDirection);\n"
+    "    }\n"
+    "\n"
+    // Apply shadows to diffuse and specular (but not ambient)
+    "    vec3 flashlightLighting = ambient + (diffuse + specular) * intensity * (1.0 - shadow);\n"
+    "\n"
+    // Magical light calculations
+    "    vec3 magicalLightDir = normalize(magicalLightPos - FragPos);\n"
+    "    float magicalDistance = length(magicalLightPos - FragPos);\n"
+    "\n"
+    // Magical lighting
+    "    float magicalAttenuation = magicalLightIntensity / max(1.0 + 0.09 * magicalDistance + 0.032 * magicalDistance * magicalDistance, 1.0);\n"
+    "    float magicalFalloff = 1.0 - smoothstep(0.0, max(magicalLightRadius, 1.0), magicalDistance);\n"
+    "    magicalFalloff = pow(max(magicalFalloff, 0.0), 2.0);\n"
+    "    magicalAttenuation *= magicalFalloff;\n"
+    "\n"
+    "    float magicalDiff = max(dot(norm, magicalLightDir), 0.0);\n"
+    "    vec3 magicalDiffuse = magicalLightColor * magicalDiff * vertexColor * magicalAttenuation;\n"
+    "\n"
+    "    vec3 magicalReflectDir = reflect(-magicalLightDir, norm);\n"
+    "    float magicalSpec = pow(max(dot(viewDir, magicalReflectDir), 0.0), max(shininess * 0.5, 1.0));\n"
+    "    vec3 magicalSpecular = magicalLightColor * magicalSpec * magicalAttenuation * 0.3;\n"
+    "\n"
+    "    vec3 magicalLighting = magicalDiffuse + magicalSpecular;\n"
+    "\n"
+    // Combine all lighting
+    "    vec3 litColor = baseColor + flashlightLighting + magicalLighting;\n"
+    "    litColor = clamp(litColor, vec3(0.0), vec3(1.0));\n"
+    "\n"
+    // Apply fog
+    "    float distance = length(cameraPos - FragPos);\n"
+    "    float fogRange = max(fogEnd - fogStart, 0.1);\n" // prevent division by zero
+    "    float fogFactor = clamp((fogEnd - distance) / fogRange, 0.0, 1.0);\n"
+    "    vec3 finalColor = mix(fogColor, litColor, fogFactor);\n"
+    "    finalColor = clamp(finalColor, vec3(0.0), vec3(1.0));\n"
+    "    FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));\n"
+    "}\n";
 }
 
 const char* getTexShadowVertexShaderSource() // Textured shadow vertex shader
 {
     return
-        "#version 330 core\n"
-        "layout (location = 0) in vec3 aPos;\n"
-        "layout (location = 2) in vec2 aUV;\n"
-        "\n"
-        "uniform mat4 lightSpaceMatrix;\n"
-        "uniform mat4 worldMatrix;\n"
-        "\n"
-        "out vec2 TexCoords;\n"
-        "\n"
-        "void main()\n"
-        "{\n"
-        "    TexCoords = aUV;\n"
-        "    gl_Position = lightSpaceMatrix * worldMatrix * vec4(aPos, 1.0);\n"
-        "}\n";
+    "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "layout (location = 2) in vec2 aUV;\n"
+    "\n"
+    "uniform mat4 lightSpaceMatrix;\n"
+    "uniform mat4 worldMatrix;\n"
+    "\n"
+    "out vec2 TexCoords;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    TexCoords = aUV;\n"
+    "    gl_Position = lightSpaceMatrix * worldMatrix * vec4(aPos, 1.0);\n"
+    "}\n";
 }
 
 const char* getTexShadowFragmentShaderSource() // Textured shadow fragment shader
 {
     return
-        "#version 330 core\n"
-        "in vec2 TexCoords;\n"
-        "\n"
-        "uniform sampler2D textureSampler;\n"
-        "\n"
-        "void main()\n"
-        "{\n"
-        "    float alpha = texture(textureSampler, TexCoords).a;\n"
-        "    if (alpha < 0.5) {\n"
-        "        discard;\n"
-        "    }"
-        "}";
+    "#version 330 core\n"
+    "in vec2 TexCoords;\n"
+    "\n"
+    "uniform sampler2D textureSampler;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    float alpha = texture(textureSampler, TexCoords).a;\n"
+    "    if (alpha < 0.5) {\n"
+    "        discard;\n"
+    "    }\n"
+    "}\n";
 }
 
 
@@ -933,10 +932,9 @@ int main(int argc, char*argv[])
     // Enable alpha blending (for transparency)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    glfwWindowHint(GL_DEPTH_BITS, 24); // miow
     
     // Enable Depth Test
+    glfwWindowHint(GL_DEPTH_BITS, 24);
     glEnable(GL_DEPTH_TEST); 
 
     // Load Textures
@@ -1037,6 +1035,7 @@ int main(int argc, char*argv[])
     // Rendering Loop
     while(!glfwWindowShouldClose(window))
     {
+        // Fog settings
         glm::vec3 fogColor = glm::vec3(0.15f, 0.25f, 0.4f);
         float fogStart = 2.5f;
         float fogEnd = 15.0f;
@@ -1062,12 +1061,12 @@ int main(int argc, char*argv[])
         // Calculate view matrix
         glm::mat4 viewMatrix = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         
-        // =========================
-        // 1. SHADOW MAP GENERATION
-        // =========================
+        // Shadow map generation
         if (flashlightOn) {
+            // Set up light space matrix
             glm::mat4 lightSpaceMatrix = getLightSpaceMatrix(flashlightPos, cameraFront);
             
+            // Prepare to render shadow map
             glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
             glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
             glClear(GL_DEPTH_BUFFER_BIT);
@@ -1090,9 +1089,7 @@ int main(int argc, char*argv[])
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         }
         
-        // =========================
-        // 2. REGULAR SCENE RENDERING
-        // =========================
+        // Scene Rendering
         glViewport(0, 0, 800, 600);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
@@ -1124,10 +1121,10 @@ int main(int argc, char*argv[])
         glDepthMask(GL_TRUE);
         glDepthFunc(GL_LESS);
         
-        // ========== RENDER COLOR GEOMETRY WITH SHADOWS ==========
-        glUseProgram(colorShaderProgramWithShadows);
+        // ========== RENDER COLOR GEOMETRY ==========
+        glUseProgram(colorShaderProgramWithShadows); // w/ shadows
         
-        // Set up shadow uniforms
+        // Set up shadows
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, depthMap);
         glUniform1i(glGetUniformLocation(colorShaderProgramWithShadows, "shadowMap"), 1);
@@ -1161,7 +1158,7 @@ int main(int argc, char*argv[])
             glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightIntensity"), 20.0f);
             glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightRadius"), 30.0f);
         } else {
-            // Turn the light off by setting its intensity and color to 0
+            // turn the light off
             glUniform3f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightColor"), 0.0f, 0.0f, 0.0f);
             glUniform1f(glGetUniformLocation(colorShaderProgramWithShadows, "magicalLightIntensity"), 0.0f);
         }
@@ -1199,7 +1196,7 @@ int main(int argc, char*argv[])
         // ========== RENDER TEXTURED GEOMETRY ==========
         glUseProgram(texturedShaderProgram);
         
-        // Set all the uniforms for textured shader (same as before)
+        // Set all uniforms for textured shader
         glUniform3f(glGetUniformLocation(texturedShaderProgram, "lightAmbient"), 0.25f, 0.25f, 0.3f);
         glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightPos"), 1, &flashlightPos[0]);
         glUniform3fv(glGetUniformLocation(texturedShaderProgram, "lightDir"), 1, &cameraFront[0]);
@@ -1218,14 +1215,12 @@ int main(int argc, char*argv[])
         }
         glUniform1f(glGetUniformLocation(texturedShaderProgram, "shininess"), 80.0f);
         
-        // Set magical light uniforms
         if (magicalLightOn) {
             glUniform3fv(glGetUniformLocation(texturedShaderProgram, "magicalLightPos"), 1, &magicalLightPos[0]);
             glUniform3f(glGetUniformLocation(texturedShaderProgram, "magicalLightColor"), 1.0f, 0.4f, 0.8f);
             glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightIntensity"), 25.0f);
             glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightRadius"), 35.0f);
         } else {
-            // Turn the light off by setting its intensity and color to 0
             glUniform3f(glGetUniformLocation(texturedShaderProgram, "magicalLightColor"), 0.0f, 0.0f, 0.0f);
             glUniform1f(glGetUniformLocation(texturedShaderProgram, "magicalLightIntensity"), 0.0f);
         }
@@ -1233,7 +1228,6 @@ int main(int argc, char*argv[])
         glUniform3f(glGetUniformLocation(texturedShaderProgram, "flashlightColor"), 1.0f, 1.0f, 0.6f);
         glUniform1f(glGetUniformLocation(texturedShaderProgram, "falloffSmoothness"), 30.0f);
         
-        // Set fog uniforms
         fogColorLoc = glGetUniformLocation(texturedShaderProgram, "fogColor");
         fogStartLoc = glGetUniformLocation(texturedShaderProgram, "fogStart");
         fogEndLoc = glGetUniformLocation(texturedShaderProgram, "fogEnd");
@@ -1244,7 +1238,6 @@ int main(int argc, char*argv[])
         glUniform1f(fogEndLoc, fogEnd);
         glUniform3fv(camPosLoc, 1, &cameraPos[0]);
         
-        // Set projection and view matrices
         texturedProjectionMatrixLocation = glGetUniformLocation(texturedShaderProgram, "projectionMatrix");
         glUniformMatrix4fv(texturedProjectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
         
@@ -1266,7 +1259,7 @@ int main(int argc, char*argv[])
             glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
         }
         
-        // Draw 3D plants
+        // Draw plants
         glBindVertexArray(plantVAO);
         glBindTexture(GL_TEXTURE_2D, plantTextureID);
         for(int i = 0; i < nbPlants; i++){
@@ -1306,7 +1299,7 @@ int main(int argc, char*argv[])
             specialPlant3Collected = true;
         }
         
-        // Draw flower and dragonfly (same as before)
+        // Draw flower and dragonfly (parent animation)
         glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
         float angleRadians = glm::radians(angle);
         
@@ -1349,7 +1342,7 @@ int main(int argc, char*argv[])
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingFrontWorldMatrix[0][0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
         
-        // Back wing
+        // back wing
         float flapAngleBack = -12.0f * glm::abs(sin(glfwGetTime() * 2.0f));
         glm::vec3 wingOffsetBack = wingPositionBack - flowerPosition;
         
@@ -1365,11 +1358,11 @@ int main(int argc, char*argv[])
         glfwSwapBuffers(window);
         glfwPollEvents();
         
-        // Handle inputs (same as before)
+        // Handle inputs
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
             glfwSetWindowShouldClose(window, true);
         
-        if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
+        if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) { // F for flashlight
             if (!fKeyPressed) {
                 flashlightOn = !flashlightOn;
                 fKeyPressed = true;
@@ -1378,7 +1371,7 @@ int main(int argc, char*argv[])
         else {
             fKeyPressed = false;
         }
-        if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS) {
+        if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS) { // L for light
             if (!mKeyPressed) {
                 magicalLightOn = !magicalLightOn;
                 mKeyPressed = true;
@@ -1388,8 +1381,9 @@ int main(int argc, char*argv[])
             mKeyPressed = false;
         }
         
-        float cameraSpeed = 2.5 * deltaTime;
+        float cameraSpeed = 2.5 * deltaTime; // can be ajusted
         
+        // Movement keys
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             cameraPos += cameraSpeed * cameraFront;
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -1398,13 +1392,14 @@ int main(int argc, char*argv[])
             cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-    }
+    } // *end of render loop*
     
     // Shutdown GLFW
     glfwTerminate();
     
     return 0;
 }
+
 
 // Helper functions
 GLuint loadTexture(const char *filename)
@@ -1417,7 +1412,7 @@ GLuint loadTexture(const char *filename)
         return 0;
     }
 
-    // create and bind texturess
+    // create and bind textures
     GLuint textureId = 0;
     glGenTextures(1, &textureId);
     assert(textureId != 0);
@@ -1463,7 +1458,7 @@ int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 4*sizeof(glm::vec3), (void*)sizeof(glm::vec3));
  glEnableVertexAttribArray(1);
 
- // UV coordinate attribute (location 2) - using only X and Y components
+ // UV coordinate attribute (location 2)
  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 4*sizeof(glm::vec3), (void*)(2*sizeof(glm::vec3)));
  glEnableVertexAttribArray(2);
  
@@ -1479,7 +1474,7 @@ int createTexturedVertexArrayObject(const glm::vec3* vertexArray, int arraySize)
 
 void setupShadowMapping() 
 {
-    // Generate depth map FBO
+    // Generate depth map FBO (framebuffer obj)
     glGenFramebuffers(1, &depthMapFBO);
     
     // Create depth texture
@@ -1524,16 +1519,16 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
 {
     glUseProgram(shadowShaderProgram);
 
-    // Set light space matrix
+    // Set up light space matrix
     glUniformMatrix4fv(glGetUniformLocation(shadowShaderProgram, "lightSpaceMatrix"), 1, GL_FALSE, &lightSpaceMatrix[0][0]);
     GLuint worldMatrixLocation = glGetUniformLocation(shadowShaderProgram, "worldMatrix");
 
-    // Render ground (unchanged)
+    // Render ground
     glBindVertexArray(floorVAO);
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &groundWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    // Render mushrooms (unchanged)
+    // Render mushrooms
     glBindVertexArray(mushroomVAO);
     for (int i = 0; i < mushroomCount; ++i) {
         glm::mat4 mushroomMatrix = glm::translate(glm::mat4(1.0f), mushroomPositions[i]) *
@@ -1542,7 +1537,7 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
         glDrawElements(GL_TRIANGLES, mushroomVertices, GL_UNSIGNED_INT, 0);
     }
 
-    // Render plants (unchanged)
+    // Render plants
     glBindVertexArray(plantVAO);
     for (int i = 0; i < plantCount; ++i) {
         glm::mat4 plantMatrix = glm::translate(glm::mat4(1.0f), plantPositions[i]) *
@@ -1551,28 +1546,27 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
         glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
     }
 
-    // Render special plants ONLY if they are not collected
+    // Render special plants
     glBindVertexArray(specialPlantVAO);
-    if (!specialPlant1Collected) {
+    if (!specialPlant1Collected) { // if not collected
         glm::mat4 specialPlant1Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition1) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant1Matrix[0][0]);
         glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
     }
 
-    if (!specialPlant2Collected) {
+    if (!specialPlant2Collected) { // ^
         glm::mat4 specialPlant2Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition2) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant2Matrix[0][0]);
         glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
     }
 
-    if (!specialPlant3Collected) {
+    if (!specialPlant3Collected) { // ^
         glm::mat4 specialPlant3Matrix = glm::translate(glm::mat4(1.0f), specialPlantPosition3) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 4.0f, 2.0f));
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant3Matrix[0][0]);
         glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
     }
 
-    // Render the plant and dragonfly for shadow map generation
-
+    // Render the flower and dragonfly for shadow map generation
     glUseProgram(texturedShadowShaderProgram);
     glUniformMatrix4fv(glGetUniformLocation(texturedShadowShaderProgram, "lightSpaceMatrix"), 1, GL_FALSE, &lightSpaceMatrix[0][0]);
     worldMatrixLocation = glGetUniformLocation(texturedShadowShaderProgram, "worldMatrix");
@@ -1594,7 +1588,7 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, flowerVertices);
 
-    // Render the dragonfly body
+    // Render the dragonfly
     glm::mat4 dragonflyLocalMatrix = glm::translate(glm::mat4(1.0f), dragonflyPosition - flowerPosition);
     glm::mat4 dragonflyWorldMatrix = plantMatrix * dragonflyLocalMatrix;
     
@@ -1603,7 +1597,7 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
     glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWorldMatrix[0][0]);
     glDrawArrays(GL_TRIANGLES, 0, dragonflyVertices);
 
-    // Render the dragonfly wings
+    // Render the front wing
     float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));
     glm::vec3 wingOffsetFront = wingPositionFront - flowerPosition;
     glm::mat4 wingFrontLocalMatrix =
