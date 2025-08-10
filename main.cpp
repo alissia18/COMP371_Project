@@ -44,7 +44,10 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
                            int plantCount, int plantVertices,
                            GLuint specialPlantVAO, glm::vec3 specialPlantPosition1, glm::vec3 specialPlantPosition2,
                            glm::vec3 specialPlantPosition3, int specialPlantVertices,
-                           bool specialPlant1Collected, bool specialPlant2Collected, bool specialPlant3Collected);
+                           bool specialPlant1Collected, bool specialPlant2Collected, bool specialPlant3Collected,
+                           GLuint flowerPlaneVAO, int flowerVertices, float angle, glm::vec3 flowerPosition,
+                           GLuint dragonflyPlaneVAO, int dragonflyVertices, glm::vec3 dragonflyPosition,
+                           glm::vec3 wingPositionFront, glm::vec3 wingPositionBack);
 
 using namespace glm;
 using namespace std;
@@ -1079,7 +1082,10 @@ while(!glfwWindowShouldClose(window))
                               mushroomVAO, mushroomPositions, mushroomScales, 6, mushroomVertices,
                               plantVAO, plantPositions, plantScales, nbPlants, plantVertices,
                               specialPlantVAO, specialPlantPosition1, specialPlantPosition2, specialPlantPosition3, specialPlantVertices,
-                              specialPlant1Collected, specialPlant2Collected, specialPlant3Collected);
+                              specialPlant1Collected, specialPlant2Collected, specialPlant3Collected,
+                              flowerPlaneVAO, 6, angle, flowerPosition,
+                              dragonflyPlaneVAO, 6, dragonflyPosition,
+                              wingPositionFront, wingPositionBack);
         
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -1507,7 +1513,10 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
                            int plantCount, int plantVertices,
                            GLuint specialPlantVAO, glm::vec3 specialPlantPosition1, glm::vec3 specialPlantPosition2,
                            glm::vec3 specialPlantPosition3, int specialPlantVertices,
-                           bool specialPlant1Collected, bool specialPlant2Collected, bool specialPlant3Collected)
+                           bool specialPlant1Collected, bool specialPlant2Collected, bool specialPlant3Collected,
+                           GLuint flowerPlaneVAO, int flowerVertices, float angle, glm::vec3 flowerPosition,
+                           GLuint dragonflyPlaneVAO, int dragonflyVertices, glm::vec3 dragonflyPosition,
+                           glm::vec3 wingPositionFront, glm::vec3 wingPositionBack)
 {
     glUseProgram(shadowShaderProgram);
 
@@ -1533,7 +1542,7 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
     glBindVertexArray(plantVAO);
     for (int i = 0; i < plantCount; ++i) {
         glm::mat4 plantMatrix = glm::translate(glm::mat4(1.0f), plantPositions[i]) *
-                                glm::scale(glm::mat4(1.0f), plantScales[i]);
+                                 glm::scale(glm::mat4(1.0f), plantScales[i]);
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
         glDrawElements(GL_TRIANGLES, plantVertices, GL_UNSIGNED_INT, 0);
     }
@@ -1557,4 +1566,55 @@ void renderSceneForShadows(glm::mat4 lightSpaceMatrix, int floorVAO, glm::mat4 g
         glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &specialPlant3Matrix[0][0]);
         glDrawElements(GL_TRIANGLES, specialPlantVertices, GL_UNSIGNED_INT, 0);
     }
+
+    // Render the plant and dragonfly for shadow map generation
+
+    // Draw flower
+    glm::vec3 stemOffset = glm::vec3(0.5f, -0.5f, 0.0f);
+    float angleRadians = glm::radians(angle);
+    
+    glm::mat4 plantMatrix =
+        glm::translate(glm::mat4(1.0f), flowerPosition) *
+        glm::translate(glm::mat4(1.0f), stemOffset) *
+        glm::rotate(glm::mat4(1.0f), angleRadians, glm::vec3(0, 0, 1)) *
+        glm::translate(glm::mat4(1.0f), -stemOffset) *
+        glm::scale(glm::mat4(1.0f), glm::vec3(2,2,2));
+
+    glBindVertexArray(flowerPlaneVAO);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &plantMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, flowerVertices);
+
+    // Draw dragonfly body
+    glm::mat4 dragonflyLocalMatrix = glm::translate(glm::mat4(1.0f), dragonflyPosition - flowerPosition);
+    glm::mat4 dragonflyWorldMatrix = plantMatrix * dragonflyLocalMatrix;
+    
+    glBindVertexArray(dragonflyPlaneVAO);
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &dragonflyWorldMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, dragonflyVertices);
+
+    // Draw dragonfly wings with animation
+    float flapAngle = 25.0f * glm::abs(sin(glfwGetTime() * 2.0f));
+    glm::vec3 wingOffsetFront = wingPositionFront - flowerPosition;
+    
+    glm::mat4 wingFrontLocalMatrix =
+        glm::translate(glm::mat4(1.0f), wingOffsetFront) *
+        glm::rotate(glm::mat4(1.0f), glm::radians(flapAngle), glm::vec3(1, 0, 0));
+    
+    glm::mat4 wingFrontWorldMatrix = plantMatrix * wingFrontLocalMatrix;
+    
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingFrontWorldMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, dragonflyVertices);
+
+    // Back wing
+    float flapAngleBack = -12.0f * glm::abs(sin(glfwGetTime() * 2.0f));
+    glm::vec3 wingOffsetBack = wingPositionBack - flowerPosition;
+    
+    glm::mat4 wingBackLocalMatrix =
+        glm::translate(glm::mat4(1.0f), wingOffsetBack) *
+        glm::rotate(glm::mat4(1.0f), glm::radians(flapAngleBack), glm::vec3(1, 0, 0));
+    
+    glm::mat4 wingBackWorldMatrix = plantMatrix * wingBackLocalMatrix;
+    
+    glUniformMatrix4fv(worldMatrixLocation, 1, GL_FALSE, &wingBackWorldMatrix[0][0]);
+    glDrawArrays(GL_TRIANGLES, 0, dragonflyVertices);
 }
